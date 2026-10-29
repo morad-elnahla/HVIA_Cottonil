@@ -1,0 +1,50 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+credentials*.json
+
+# Business data: never publish raw OR derived records
+data/
+*.parquet
+*.csv
+*.xlsx
+*.xls
+*.sqlite*
+*.db
+
+# Python, environments, tools and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+htmlcov/
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Local diagnostics and delivery archives
+logs/
+*.log
+*.zip
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini
+test_groq.py
+HANDOFF.md
+.codex/
+.agents/
