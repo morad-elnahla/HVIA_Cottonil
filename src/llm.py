@@ -14,6 +14,7 @@ import random
 import re
 import time
 from collections import OrderedDict, deque
+from copy import deepcopy
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -26,6 +27,7 @@ FRIENDLY = {"rate_limit": "خدمة الذكاء الاصطناعي (Groq) مش�
             "network": "مش قادرين نوصل لخدمة الذكاء الاصطناعي (Groq)",
             "unavailable": "خدمة الذكاء الاصطناعي (Groq) غير متاحة دلوقتي",
             "invalid": "رد خدمة الذكاء الاصطناعي (Groq) مكانش مفهوم",
+            "auth": "خدمة Groq رفضت بيانات الاتصال؛ إعداد الاتصال محتاج مراجعة",
             "budget": "وفّرنا استهلاك الذكاء الاصطناعي (Groq) عشان نتجنب حد الاستخدام"}
 
 
@@ -110,6 +112,7 @@ class GroqClient:
         self.s = session or requests.Session()
         self.sleep, self.clock = sleep, clock
         self.cool_until = 0.0
+        self.cool_kind = "unavailable"
         self.fails = 0
         self.window: deque[tuple[float, int]] = deque()      # (وقت، توكنز) في آخر 60 ثانية
         self.cache: OrderedDict[str, tuple[float, dict]] = OrderedDict()
@@ -130,6 +133,7 @@ class GroqClient:
 
     def _cool(self, secs: float, why: str):
         self.cool_until = self.clock() + secs
+        self.cool_kind = why if why in FRIENDLY else "unavailable"
         self.log.warning("cooldown %.0fs (%s)", secs, why)
 
     # ---- حد الاستهلاك المحلي (قبل ما Groq يرفض)
@@ -159,14 +163,18 @@ class GroqClient:
             raise LLMError("unavailable", "no key")
         left = self.cooldown_left()
         if left > 0:
-            raise LLMError("rate_limit" if self.fails == 0 else "unavailable", f"cooldown {left:.0f}s")
+            raise LLMError(self.cool_kind, f"cooldown {left:.0f}s")
         if cache_key and cache_key in self.cache and self.clock() - self.cache[cache_key][0] < 3600:
             self.cache.move_to_end(cache_key)
-            return self.cache[cache_key][1]
+            return deepcopy(self.cache[cache_key][1])
         est = sum(len(m["content"]) for m in messages) // 3 + max_tokens
         if not self._budget_ok(est):
             raise LLMError("budget", f"est {est} tokens over local TPM budget")
         body = {"model": model or self.cfg.model, "messages": messages, "temperature": 0, "max_tokens": max_tokens, "response_format": {"type": "json_object"}}
+        # GPT-OSS reasoning consumes the same completion budget as the JSON answer.
+        # Low effort is documented for these two models; don't send it to others.
+        if body["model"] in ("openai/gpt-oss-20b", "openai/gpt-oss-120b") and purpose in ("synthesis", "synthesis_review"):
+            body["reasoning_effort"] = "low"
         last: LLMError | None = None
         for attempt in range(1, self.cfg.retries + 1):
             est = sum(len(m["content"]) for m in body["messages"]) // 3 + body["max_tokens"]
@@ -182,6 +190,7 @@ class GroqClient:
             else:
                 dt = self.clock() - t0
                 if r.status_code == 200:
+                    parse_reason = "response_envelope"
                     try:
                         data = r.json()
                         choice = data["choices"][0]
@@ -189,25 +198,33 @@ class GroqClient:
                             # Retry with room for the complete object, within the existing local budget.
                             used = int((data.get("usage") or {}).get("total_tokens") or est)
                             self.window.append((self.clock(), used))
-                            larger = min(body["max_tokens"] * 2, 1800)
+                            larger = min(body["max_tokens"] * 2, max(1800, max_tokens * 2))
                             next_est = sum(len(m["content"]) for m in body["messages"]) // 3 + larger
                             if larger > body["max_tokens"] and self._budget_ok(next_est):
                                 body["max_tokens"] = larger
                             else:
                                 raise LLMError("budget", "truncated response; retry exceeds local budget")
                             self.log.warning("truncated JSON q=%s %s attempt=%d", qkey, purpose, attempt)
+                            parse_reason = "output_truncated"
                             raise ValueError("truncated JSON")
+                        if choice.get("finish_reason") not in (None, "stop"):
+                            parse_reason = "unexpected_finish_reason"
+                            raise ValueError("unexpected finish reason")
                         content = choice["message"]["content"]
                         if not isinstance(content, str):
+                            parse_reason = "missing_content"
                             raise ValueError("missing JSON text")
                         # Some models wrap otherwise valid JSON in a Markdown fence.
                         content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip(), flags=re.IGNORECASE)
+                        parse_reason = "json_syntax"
                         out = json.loads(content)
                         if not isinstance(out, dict):
+                            parse_reason = "json_not_object"
                             raise ValueError("expected JSON object")
+                        parse_reason = "usage_metadata"
                         used = int((data.get("usage") or {}).get("total_tokens") or est)
                     except (ValueError, KeyError, IndexError, TypeError, AttributeError):
-                        last = LLMError("invalid", "bad json from model")
+                        last = LLMError("invalid", "parse:" + parse_reason)
                         body["messages"] = messages + [{"role": "user", "content": "Return a complete JSON object matching the requested schema. No explanation, reasoning or Markdown; keep optional fields omitted and text short."}]
                     else:
                         self.fails = 0
@@ -216,7 +233,7 @@ class GroqClient:
                         self.stats["tokens"] += used
                         self.log.info("ok q=%s %s model=%s attempt=%d %.1fs tokens=%d", qkey, purpose, body["model"], attempt, dt, used)
                         if cache_key:
-                            self.cache[cache_key] = (self.clock(), out)
+                            self.cache[cache_key] = (self.clock(), deepcopy(out))
                             while len(self.cache) > 128:
                                 self.cache.popitem(last=False)
                         return out
@@ -234,7 +251,7 @@ class GroqClient:
                     self._cool(600, "auth")
                     self.stats["errors"] += 1
                     self.log.error("auth failure status=%s", r.status_code)
-                    raise LLMError("unavailable", f"auth {r.status_code}")
+                    raise LLMError("auth", f"auth {r.status_code}")
                 elif r.status_code == 400:
                     try:
                         error = r.json().get("error", {})

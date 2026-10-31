@@ -8,9 +8,10 @@ import pytest
 import requests
 
 from src import data, inventory as inv, metrics as M, models, ui
-from src.assistant import Assistant, Ctx
+from src.assistant import Assistant, Ctx, norm
 from src.llm import GroqClient, LLMError, Settings, load_env, redact
 
+TEST_KEY = "gsk_" + "TESTKEY" + "0" * 10
 RAW = data.find_raw()
 pytestmark = pytest.mark.skipif(RAW is None or not (data.PROC / "sales.parquet").exists(), reason="محتاج data/raw وdata/processed")
 
@@ -107,7 +108,7 @@ def test_assistant_understands_entities_and_periods(D):
     s, e, _ = A.parse_period("مبيعات سبتمبر 2026")
     assert (s, e) == (pd.Timestamp("2026-09-01"), pd.Timestamp("2026-09-30"))
     s, e, _ = A.parse_period("آخر 3 شهور")
-    assert (e - s).days == 89
+    assert s == e - pd.DateOffset(months=3) + pd.Timedelta(days=1)
     assert A.parse_period("مبيعات كام") is None
 
 
@@ -272,7 +273,7 @@ class _Sess:
 
 
 def _client(fn, **kw):
-    cfg = Settings(api_key="gsk_TESTKEY0000000000", **kw)
+    cfg = Settings(api_key=TEST_KEY, **kw)
     sleeps = []
     return GroqClient(cfg, _Sess(fn), sleep=sleeps.append), sleeps
 
@@ -322,7 +323,7 @@ def test_timeout_and_network_errors_are_retried_with_backoff():
 
 
 def test_failures_become_friendly_messages_without_secrets(tmp_path):
-    c, _ = _client(lambda req, n: requests.ConnectionError("boom gsk_TESTKEY0000000000"))
+    c, _ = _client(lambda req, n: requests.ConnectionError("boom " + TEST_KEY))
     with pytest.raises(LLMError) as e:
         c.chat_json(M1)
     assert e.value.kind == "network" and "gsk_" not in str(e.value) and "gsk_" not in e.value.user_msg
@@ -354,17 +355,18 @@ def _plan_asst(D, plan, summary=None, **kw):
         if "convert" in req["messages"][0]["content"]:
             return _R(content=plan)
         return _R(content={"summary": summary or ""})
-    cfg = Settings(api_key="gsk_TESTKEY0000000000", **kw)
+    cfg = Settings(api_key=TEST_KEY, **kw)
     c = GroqClient(cfg, _Sess(fn), sleep=lambda x: None)
     return Assistant(D, Ctx(D.last - pd.Timedelta(days=364), D.last), c), c
 
 
-def test_groq_plans_multi_part_question_and_summary_is_grounded(D):
+def test_explicit_multi_part_question_uses_validated_local_plan(D):
     plan = {"calls": [{"title": "أعلى فروع الربح", "tool": "query", "metric": "margin", "dim": "branch", "rank": "top", "top_n": 3},
                       {"title": "توقع جليم", "tool": "forecast", "branches": ["جليم"], "months": 1}], "clarify": ""}
     A, c = _plan_asst(D, plan, "أعلى الفروع في الربح مدينتي الربيع وجليم، وتوقع جليم للشهر الجاي له مدى محتمل.")
     a = A.ask("أعلى 3 فروع في الربح وتوقع جليم للشهر الجاي")
-    assert a.mode == "Groq" and len(a.parts) == 2 and a.summary and len(c.s.calls) == 2
+    # Explicit requests need no model call or duplicate generated summary.
+    assert a.mode == "المحرك المحلي" and len(a.parts) == 2 and not a.summary and len(c.s.calls) == 0
     assert "الربح" in a.parts[0].headline and "جليم" in a.parts[1].forecasts[0] and len(a.parts[1].table) == 1
     assert M.money(a.parts[0].table.iloc[0]["الربح"]) in a.parts[0].headline
 
@@ -373,32 +375,32 @@ def test_groq_summary_with_invented_number_is_dropped(D):
     plan = {"calls": [{"title": "أ", "tool": "query", "metric": "net"}, {"title": "ب", "tool": "query", "metric": "margin"}], "clarify": ""}
     A, _ = _plan_asst(D, plan, "المبيعات هتزيد 77% بسبب حملة الصيف.")
     a = A.ask("المبيعات والربح")
-    assert a.summary == "" and a.mode == "Groq" and "77" not in a.text
+    assert a.summary == "" and a.mode == "المحرك المحلي" and "بسبب حملة الصيف" not in a.text
 
 
 def test_unknown_branch_is_not_silently_replaced_by_company_total(D):
     A, _ = _plan_asst(D, {"calls": [{"title": "x", "tool": "query", "metric": "net", "branches": ["فرع الأحلام"]}], "clarify": ""})
     a = A.ask("مبيعات فرع الأحلام")
-    assert "مقدرتش ألاقي" in a.headline and "الأحلام" in a.headline and "كل الشركة" not in a.source.get("النطاق", "")
+    assert "مقدرتش ألاقي" in a.headline and norm("الأحلام") in norm(a.headline) and "كل الشركة" not in a.source.get("النطاق", "")
 
 
 def test_groq_rate_limit_falls_back_to_local_with_friendly_note(D):
-    c = GroqClient(Settings(api_key="gsk_TESTKEY0000000000"), _Sess(lambda r, n: _R(429, text="try again in 40s")), sleep=lambda x: None)
+    c = GroqClient(Settings(api_key=TEST_KEY), _Sess(lambda r, n: _R(429, text="try again in 40s")), sleep=lambda x: None)
     A = Assistant(D, Ctx(D.last - pd.Timedelta(days=364), D.last), c)
-    a = A.ask("أعلى 3 فروع في الربح")
-    assert a.mode == "المحرك المحلي" and "حد الاستخدام" in a.llm_note and "فروع" in a.headline
+    a = A.ask("وريني أداء الشركة")
+    assert a.mode == "المحرك المحلي" and "حد الاستخدام" in a.llm_note and not A.state
     calls = len(c.s.calls)
-    b = A.ask("المبيعات كام الشهر اللي فات؟")
-    assert len(c.s.calls) == calls and b.mode == "المحرك المحلي" and "مؤقتًا" in b.llm_note       # مفيش ضغط زيادة على الخدمة
+    b = A.ask("وريني نتائج الشركة")
+    assert len(c.s.calls) == calls and b.mode == "المحرك المحلي" and "حد الاستخدام" in b.llm_note
     assert "gsk_" not in a.text + a.llm_note + b.llm_note
 
 
 def test_groq_invalid_json_and_clarify(D):
     A, _ = _plan_asst(D, {"hello": 1})
-    a = A.ask("أعلى 3 فروع في الربح")
+    a = A.ask("وريني أداء الشركة")
     assert a.mode == "المحرك المحلي" and "مكانش مفهوم" in a.llm_note
     A2, _ = _plan_asst(D, {"calls": [], "clarify": "تقصد أنهي فرع؟"})
-    assert A2.ask("وفي فرع؟").headline == "تقصد أنهي فرع؟"
+    assert A2.ask("وضح المطلوب").headline == "تقصد أنهي فرع؟"
 
 
 # ================================================================= المساعد المحلي: الفهم والدقة
@@ -406,14 +408,14 @@ def test_assistant_numbers_match_raw(D, raw):
     A = local_assistant(D)
     a = A.ask_local("المبيعات كام الشهر اللي فات؟")
     truth = raw[(raw.date >= "2026-09-01") & (raw.date <= "2026-09-30")].net_line_EGP.sum()
-    assert M.money(truth) in a.text
+    assert f"{truth:,.2f} جنيه" in a.text
     a = A.ask_local("أعلى 3 فروع في المبيعات")
     cur = raw[raw.date >= D.last - pd.Timedelta(days=364)]
     top = cur.groupby("branch_id").net_line_EGP.sum().sort_values(ascending=False).head(3).index
     assert list(a.table["الاسم"][:3]) == [D.branch_name[b] for b in top]
     a = A.ask_local("مبيعات البوكسرات رجالي اونلاين في سبتمبر 2026")
     t = raw[(raw.date >= "2026-09-01") & (raw.date <= "2026-09-30") & (raw.category_en == "Men boxers") & (raw.sales_channel == "E-commerce")].net_line_EGP.sum()
-    assert M.money(t) in a.text
+    assert f"{t:,.2f} جنيه" in a.text
     assert set(A.ask_local("قارن بين مبيعات القاهرة والإسكندرية").table["الاسم"]) == {"القاهرة", "الإسكندرية"}
     n = raw[raw.date == D.last.normalize() - pd.Timedelta(days=1)].sales_order_id.nunique()
     assert M.num(n) in A.ask_local("كام فاتورة امبارح").text
@@ -482,7 +484,7 @@ def test_assistant_separates_fact_from_inference_and_refuses_made_up_advice(D):
     assert "مقدرش" in d.headline and not d.inferences and "تجارب" in " ".join(d.notes)
     z = A.ask_local("ليه المبيعات نزلت السنة دي؟")
     assert "زادت مش نزلت" in z.headline
-    for q, word in [("توقع مبيعات الشهر الجاي", "المتوقع"), ("ايه اللي هيخلص من المخزون", "مخزون"), ("ايه توصياتك", "اقتراحات"), ("مين احسن عملاء", "عميل"), ("عايز تحويلات", "تحويلة")]:
+    for q, word in [("توقع مبيعات الشهر الجاي", "المتوقع"), ("ايه اللي هيخلص من المخزون", "مخزون"), ("ايه توصياتك", "أولويات"), ("مين احسن عملاء", "عميل"), ("عايز تحويلات", "تحويلة")]:
         assert word in A.ask_local(q).text
 
 

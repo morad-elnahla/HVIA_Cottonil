@@ -206,26 +206,8 @@ PAGE_SUB = {"المبيعات": lambda F: f"{F['label']} · {F['scope']}", "ال
 
 
 # ---------------------------------------------------------------- عرض ردود المساعد
-def df_html(df: pd.DataFrame, max_rows: int = 12) -> str:
-    """جدول HTML صغير (RTL، أرقام منسقة) بدل جدول canvas، عشان يبان نضيف جوه المحادثة."""
-    d = df.head(max_rows)
-    heads, rows = list(d.columns), []
-    for r in d.itertuples(index=False):
-        cells = []
-        for c, v in zip(heads, r):
-            if isinstance(v, (int, float, np.integer, np.floating)) and not isinstance(v, bool):
-                if v != v:
-                    cells.append("-")
-                elif "%" in str(c):
-                    cells.append(f"{v:,.1f}%")
-                elif abs(v) >= 1000:
-                    cells.append(f"{v:,.0f}")
-                else:
-                    cells.append(f"{v:,.1f}".rstrip("0").rstrip(".") if v % 1 else f"{v:,.0f}")
-            else:
-                cells.append(esc(v))
-        rows.append(cells)
-    return ui.html_table(heads, rows, numeric=[i for i, c in enumerate(heads) if pd.api.types.is_numeric_dtype(d[c])])
+def df_html(df: pd.DataFrame, max_rows: int | None = 12) -> str:
+    return ui.dataframe_html(df, max_rows)
 
 
 def render_answer(a, compact=False, top=True, chart_key=None):
@@ -242,12 +224,12 @@ def render_answer(a, compact=False, top=True, chart_key=None):
         H(f'<div style="font-size:16px;line-height:1.9">{esc(a.headline or a.text)}</div>')
         for lbl, cls, items in (("حقائق من الداتا", "lbl-fact", a.facts), ("توقع", "lbl-fc", a.forecasts), ("استنتاج محتمل (مش مثبت)", "lbl-inf", a.inferences), ("اقتراحات مبنية على الأرقام", "lbl-fact", a.actions)):
             if items and not (compact and cls not in ("lbl-fact", "lbl-fc")):
-                H(f'<div style="margin-top:10px"><span class="{cls}">{lbl}</span></div>' + '<ul class="answer-list">' + "".join(f'<li>{esc(x)}</li>' for x in items[:(2 if compact else 8)]) + '</ul>' )
+                H(f'<div style="margin-top:10px"><span class="{cls}">{lbl}</span></div>' + '<ul class="answer-list">' + "".join(f'<li>{esc(x)}</li>' for x in (items[:2] if compact else items)) + '</ul>' )
         for x in a.notes:
             H(f'<div class="cap">ℹ️ {esc(x)}</div>')
         if not compact:
             if a.table is not None and len(a.table):
-                H(df_html(a.table))
+                H(df_html(a.table, max_rows=None))
             if a.fig is not None:
                 fig = a.fig
                 fig.update_layout(title=None)
@@ -819,9 +801,18 @@ def llm_client():
 
 def get_assistant(D, F):
     ctx = Ctx(F["start"], F["end"])
-    if st.session_state.get("_asst_stamp") != stamp():
-        st.session_state.asst = Assistant(D, ctx, llm_client())
-        st.session_state._asst_stamp = stamp()
+    current_stamp = stamp()
+    previous = st.session_state.get("asst")
+    same_data = st.session_state.get("_asst_stamp") == current_stamp
+    # A Streamlit session can outlive the imported Assistant class after edits.
+    if not same_data or type(previous) is not Assistant:
+        replacement = Assistant(D, ctx, llm_client())
+        if same_data and previous is not None:
+            from copy import deepcopy
+            replacement.state = deepcopy(getattr(previous, "state", {}))
+            replacement.turns = deepcopy(getattr(previous, "turns", []))
+        st.session_state.asst = replacement
+        st.session_state._asst_stamp = current_stamp
     st.session_state.asst.ctx = ctx
     return st.session_state.asst
 

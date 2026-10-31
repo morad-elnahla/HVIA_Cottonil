@@ -14,10 +14,12 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parent
 SOURCE_FILES = (
-    "app.py", "requirements.txt", "README.md", ".env.example", ".gitignore",
+    "app.py", "requirements.txt", "requirements.lock", "README.md", ".env.example", ".gitignore",
+    "Dockerfile", ".dockerignore", "DEPLOYMENT.md", "RELEASE_REPORT.md", "release_check.py", "live_acceptance.py",
     "package_delivery.py", ".streamlit/config.toml", "photo/1.png",
     "src/__init__.py", "src/assistant.py", "src/data.py", "src/insights.py",
-    "src/inventory.py", "src/llm.py", "src/metrics.py", "src/models.py", "src/ui.py",
+    "src/inventory.py", "src/llm.py", "src/metrics.py", "src/models.py", "src/ui.py", "src/health.py",
+    "tests/conftest.py", "tests/test_core.py", "tests/test_assistant_regression.py", "tests/test_release.py", "tests/README.md",
 )
 PROCESSED_FILES = tuple("data/processed/" + name for name in (
     "sales.parquet", "branches.parquet", "products.parquet", "customers.parquet",
@@ -84,9 +86,9 @@ def main() -> None:
     destination.mkdir(parents=True, exist_ok=True)
     target = destination / f"Cottonil_BI_{mode}_{datetime.now():%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:6]}.zip"
     delivery_note = (
-        "Cottonil BI - preliminary delivery; deployment is not ready.\n"
-        "See README.md for installation and run instructions.\n"
-        "No .env, API keys, raw data, logs, tests, caches, or virtual environments are included.\n"
+        "Cottonil BI - private deployment candidate.\n"
+        "See DEPLOYMENT.md and RELEASE_REPORT.md for setup and verified limits.\n"
+        "No .env, API keys, raw data, logs, caches, or virtual environments are included.\n"
         + ("Approved processed data is included. Keep this archive private and share only with the authorized recipient.\n"
            if args.include_processed else
            "SOURCE ONLY: this archive has no business data. The dashboard needs a complete authorized data/processed bundle supplied separately.\n")

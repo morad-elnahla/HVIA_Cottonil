@@ -338,7 +338,35 @@ def quick_row(icon: str, color: str, title: str, sub: str) -> str:
 def html_table(headers, rows, numeric=()) -> str:
     th = "".join(f'<th scope="col" class="{"num-head" if i in numeric else ""}">{esc(h)}</th>' for i, h in enumerate(headers))
     body = "".join("<tr>" + "".join(f'<td class="{"n" if i in numeric else ""}">{c}</td>' for i, c in enumerate(r)) + "</tr>" for r in rows)
-    return f'<div class="tw"><table class="tbl"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></div>'
+    return f'<div class="tw" dir="rtl"><table class="tbl"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></div>'
+
+
+def dataframe_html(df, max_rows=None) -> str:
+    """Escaped RTL table; keep money precision and never silently truncate answers."""
+    import numbers
+    import pandas as pd
+    d = df if max_rows is None else df.head(max_rows)
+    heads, rows = list(d.columns), []
+    for row in d.itertuples(index=False, name=None):
+        cells = []
+        for column, value in zip(heads, row):
+            if pd.isna(value):
+                label = "غير متاح"
+            elif isinstance(value, numbers.Real) and not isinstance(value, bool):
+                if "%" in str(column):
+                    label = f"{value:,.2f}%"
+                elif float(value).is_integer():
+                    label = f"{value:,.0f}"
+                else:
+                    label = f"{value:,.2f}"
+            else:
+                label = str(value)
+            cells.append(esc(label))
+        rows.append(cells)
+    result = html_table(heads, rows, numeric=[i for i, col in enumerate(heads) if pd.api.types.is_numeric_dtype(d[col])])
+    if len(d) < len(df):
+        result += f'<div class="cap">{esc(f"معروض {len(d)} من {len(df)} صف")}</div>'
+    return result
 
 
 def cover_bar(weeks: float, status: str, lead_safety: float, over: float, cap: float = 52) -> str:

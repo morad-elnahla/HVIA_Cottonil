@@ -1,0 +1,9 @@
+*
+!requirements.lock
+!app.py
+!src/
+!src/*.py
+!.streamlit/
+!.streamlit/config.toml
+!photo/
+!photo/1.png

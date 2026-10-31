@@ -2,13 +2,14 @@
 
 <br>
 
-# COTTONIL BI & AI
+[![COTTONIL BI & AI — animated title](https://readme-typing-svg.demolab.com?font=Syne&weight=750&size=36&duration=3000&pause=1500&color=5EEAB0&center=true&vCenter=true&width=850&lines=COTTONIL+BI+%26+AI;Arabic+Business+Intelligence;Data+%C2%B7+Evidence+%C2%B7+Decisions)](https://github.com/morad-elnahla/HVIA_Cottonil)
+
 ### مركز قيادة الأعمال · Arabic Business Intelligence
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-5eeab0?style=for-the-badge&logo=python&logoColor=white&labelColor=111b18)
+![Python](https://img.shields.io/badge/Python-3.13-5eeab0?style=for-the-badge&logo=python&logoColor=white&labelColor=111b18)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-5eeab0?style=for-the-badge&logo=streamlit&logoColor=white&labelColor=111b18)
 ![Groq](https://img.shields.io/badge/Groq-Optional_AI-5eeab0?style=for-the-badge&labelColor=111b18)
-![Status](https://img.shields.io/badge/Status-In_Development-f6b94d?style=for-the-badge&labelColor=111b18)
+![Status](https://img.shields.io/badge/Status-Private_Deployment_Candidate-f6b94d?style=for-the-badge&labelColor=111b18)
 
 > **From business records to measurable decisions — in Arabic.**
 >
@@ -16,9 +17,9 @@
 
 | Interface | Analytics | AI | Data | Release |
 |:---:|:---:|:---:|:---:|:---:|
-| Arabic · RTL · Dark theme | Pandas · Plotly | Groq + local fallback | Authorized local datasets | Preliminary delivery |
+| Arabic · RTL · Dark theme | Pandas · Plotly | Groq + evidence review | Authorized local datasets | Tested private candidate |
 
-**Under active development. Deployment is not ready; there is no public live app yet.**
+**Private deployment candidate. See [deployment instructions](DEPLOYMENT.md) and the [verification report](RELEASE_REPORT.md). No public instance has been published.**
 
 <br>
 </div>
@@ -57,11 +58,11 @@ Filters apply according to each page's stated scope. Recommendations and forecas
 
 | Step | What happens |
 |:---|:---|
-| **1. Understand** | Arabic rules and optional Groq JSON planning identify the requested metric, entities, dates, and related question parts |
+| **1. Understand** | Identify metric, entities, dates and dependencies; a selected branch set stays bound to its comparisons and per-branch plans |
 | **2. Keep context** | Supported follow-ups inherit the previous governorate, period, and filters; explicit new instructions take precedence |
 | **3. Calculate** | Local modules calculate totals, period changes, and branch contributions from filtered records |
-| **4. Explain** | Responses distinguish facts, forecasts, and possible interpretations; optional generated summaries are checked for unsupported numbers |
-| **5. Fall back** | If the service is unavailable, invalid, or rate-limited, the assistant uses local parsing and reports the response source |
+| **4. Explain** | Locally calculated facts are separate from Groq's conditional interpretations; generated analysis is reviewed against the evidence |
+| **5. Decide and disclose** | Per-branch plans explain the recorded issue, uncertainty and operational priority. Local alternatives and unavailable AI interpretation are explicitly labelled |
 
 Profit value in assistant answers means **sales profit before payroll and operating expenses**, unless another measure is explicitly stated. It is different from profit-margin percentage.
 
@@ -73,9 +74,13 @@ Example prompts — actual results depend on the available data:
 
 طيب والربح في نفس الفترة؟ عايز قيمة الربح في الفترتين والفرق
 بالجنيه والنسبة وأكتر 3 فروع أثرت عليه. متجيبليش هامش الربح.
+
+اختار أضعف فرعين من حيث نمو المبيعات خلال آخر 12 شهر،
+وقارن أداء كل فرع بمخزونه وخصوماته وهامش ربحه.
+اقترح خطتين مختلفتين، واحدة لكل فرع، وحدد أولوية التنفيذ وليه.
 ```
 
-The assistant has specific parsing rules and is still being improved; arbitrary wording is not guaranteed. Review the displayed metric, dates, scope, and source. Relative dates use the **last date in the dataset**, not necessarily today. Requests for the last N months currently use 30 days per month.
+The assistant has specific parsing rules and is still being improved; arbitrary wording is not guaranteed. Review the displayed metric, dates, scope, and source. Relative dates use the **last date in the dataset**, not necessarily today. Requests for the last N months use calendar-month offsets ending at the last recorded date.
 
 ## ✦ Forecasting
 
@@ -87,7 +92,7 @@ The assistant has specific parsing rules and is still being improved; arbitrary 
 
 ## ✦ Quick Start
 
-Python 3.10+ is required by the code syntax; development checks have run on Python 3.13. Dependencies use minimum versions rather than a pinned production lockfile.
+Python 3.13 is the validated release interpreter. Use `requirements.lock` in an isolated environment; `requirements.txt` retains the development minimum versions.
 
 ```bash
 git clone https://github.com/morad-elnahla/HVIA_Cottonil.git
@@ -110,7 +115,7 @@ source .venv/bin/activate
 Install and start:
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.lock
 streamlit run app.py
 ```
 
@@ -178,7 +183,7 @@ python package_delivery.py --include-processed --confirm-data-sharing
 python package_delivery.py --include-processed --confirm-data-sharing --dry-run
 ```
 
-Windows Desktop redirection, including OneDrive, is respected. `--output-dir PATH` optionally overrides the destination. Archives include a `Cottonil_BI/` top-level folder and a delivery note. Raw data, `.env`, logs, caches, virtual environments, tests, and ad hoc API utilities are never included. No ZIP is uploaded to GitHub.
+Windows Desktop redirection, including OneDrive, is respected. `--output-dir PATH` optionally overrides the destination. Archives include a `Cottonil_BI/` top-level folder and a delivery note. Raw data, `.env`, logs, caches, virtual environments, and ad hoc API utilities are never included. Offline regression tests and release checks are included. No ZIP is uploaded to GitHub.
 
 **Only use the data-inclusion option when all processed files are approved for the specific recipient.** Processed data can still contain private customer and commercial information. A source-only ZIP is not a populated, data-ready dashboard.
 
@@ -188,7 +193,13 @@ Windows Desktop redirection, including OneDrive, is respected. `--output-dir PAT
 HVIA_Cottonil/
 ├── app.py                    # Streamlit entry point and pages
 ├── requirements.txt          # Runtime dependencies and existing test dependency
+├── requirements.lock         # Exact versions validated in isolated Python 3.13
 ├── README.md
+├── DEPLOYMENT.md             # Private-host setup, container option and rollback
+├── RELEASE_REPORT.md         # Test evidence and remaining limits
+├── release_check.py          # Offline startup preflight
+├── live_acceptance.py        # Real Groq check, explicit --live opt-in
+├── Dockerfile                # Optional Linux container; see verification limits
 ├── .env.example              # Empty key; safe configuration template
 ├── .gitignore
 ├── package_delivery.py       # Allowlisted private-delivery ZIP builder
@@ -197,21 +208,41 @@ HVIA_Cottonil/
 ├── src/
 │   ├── assistant.py          # Intent parsing, context, and grounded answers
 │   ├── llm.py                # Groq client, retry handling, and local budgets
+│   ├── health.py             # Analytical impact of existing data-health checks
 │   ├── data.py               # Loading, source processing, quality checks
 │   ├── metrics.py            # Business metrics and change attribution
 │   ├── models.py             # Forecasting and customer models
 │   ├── inventory.py          # Coverage and transfer logic
 │   ├── insights.py           # Recommendations
 │   └── ui.py                 # Shared presentation helpers
-└── tests/test_core.py        # Existing tests; not included in delivery ZIP
+└── tests/                   # Offline regression, app, transport and release checks
 ```
 
 `data/`, `logs/`, and `.env` remain local and are ignored by Git.
 
 ## ✦ Release Status & Validation
 
-This is a **preliminary, local-run delivery**, not a production deployment. Hosting, production access controls, operational configuration, and deployment validation remain future work.
+The release candidate includes an exact dependency lock, offline regression tests,
+a read-only preflight, a complete source archive, and deployment instructions.
+See [RELEASE_REPORT.md](RELEASE_REPORT.md) for measured results and outstanding host checks.
 
-Recent targeted checks covered selected conversation-context, negation, comparison, and mocked Groq-fallback cases. They do not establish correctness for every question. No comprehensive test suite, live Groq calls, data rebuild, or browser validation was run as part of repository packaging. UI behavior across devices and deployment still require review.
+**Verified on 2026-10-31:** 260 tests passed in an isolated Python 3.13.13
+environment; two model-training/selection tests were deliberately excluded.
+Checks include all nine Streamlit pages, raw-data financial reconciliation,
+topic transitions, negation, branch selection, calendar periods and independent
+branch plans. A real Groq run of the two-branch manager question completed with
+two selected branches, two locally evidenced plans and no split answer parts.
+Passing mocked tests is not treated as proof of a live connection.
 
-Development continues after this handoff. No live deployment or production-readiness claim is made.
+For compound analysis, factual comparisons are computed locally. Groq generates
+conditional interpretations and a proposed plan, followed by an independent
+review against the same evidence. Generated prose may not add quantities,
+including quantities written as Arabic words, or restate ranked branch claims.
+The local comparison table owns those facts. If either stage fails, the response
+states that only local evidence is available; it never presents an unchecked draft.
+For per-branch decisions, evidence-based local plans remain available even when
+AI interpretation is unavailable. Priorities are operational, not a guaranteed
+ROI ranking or an optimized budget allocation.
+
+Deploy privately or behind an authenticated HTTPS gateway. This repository does
+not provide application login or claim that arbitrary questions are always understood.
