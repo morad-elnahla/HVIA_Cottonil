@@ -1,5 +1,51 @@
 # Private deployment and handoff
 
+## Streamlit Community Cloud (automatic data restore)
+
+Git deliberately excludes `data/`, including processed tables and saved forecasts.
+Community Cloud clones the repository, not your local disk. A source-only deploy
+therefore has no business data until a private snapshot source is configured.
+
+1. Generate the existing data snapshot locally: `python package_cloud_data.py`.
+   This creates `dist/cottonil-cloud-data.zip` and its `.sha256` file without
+   rebuilding data or retraining. Keep this artifact private; it contains customer
+   and business records. Never attach it to a public GitHub release.
+2. Store that ZIP at an authorized private HTTPS download endpoint (a direct object
+   URL, optionally with a bearer token). The endpoint must return the ZIP, not a
+   login/share HTML page. Prefer a durable protected endpoint; signed links must
+   remain valid for future cold starts, or be rotated before expiry.
+3. In Streamlit app Settings → Secrets, configure these **top-level** entries:
+
+   ```toml
+   BI_DATA_URL = "https://your-private-host/cottonil-cloud-data.zip"
+   BI_DATA_SHA256 = "paste-the-64-character-hash-from-the-sha256-file"
+   # BI_DATA_TOKEN = "private-download-token-if-required"
+   LLM_API_KEY = "your-Groq-key"
+   LLM_MODEL = "your-tested-Groq-model"
+   ```
+
+   Do not put secrets in Git or send them in chat. Streamlit exposes top-level
+   secrets as environment variables, which the existing Groq settings read.
+4. Deploy `app.py`, branch `main`, with Python **3.13**. `requirements.txt` now
+   installs the exact versions in `requirements.lock`. Set authorized viewer
+   access in Cloud before making business/customer views available.
+5. Restart the app. It downloads once per snapshot, checks SHA-256, validates all
+   15 files, then activates a versioned local cache. It restores after a fresh
+   host start too. All pages share the same snapshot, including forecast,
+   backtest, forecast quality, churn and health results. No training runs.
+
+For updates, publish a new ZIP and change URL/hash together, then reboot. A failed
+download or checksum displays a safe diagnostic and does not substitute fake data
+or overwrite local data. Hosted snapshot mode disables manual upload/retraining
+controls. Existing local mode still works without these settings.
+
+Offline cloud simulation: `python -m pytest tests/test_bootstrap.py -q`. This
+uses a mocked download, real saved data and all nine Streamlit pages. It does
+not prove hosting credentials, remote access, Cloud memory limits or real Groq
+connectivity. Verify those separately on the deployed application.
+
+Official setup: [Community Cloud secrets](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management).
+
 Use Python 3.13 and `requirements.lock` for the validated dependency versions.
 The application contains business/customer data views and does **not** implement
 user authentication. Keep it on localhost/private infrastructure, or place it

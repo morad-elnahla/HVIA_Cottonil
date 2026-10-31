@@ -1,9 +1,2 @@
-streamlit>=1.60
-pandas>=2.2
-numpy>=1.26
-plotly>=5.22
-pyarrow>=15
-scikit-learn>=1.4
-statsmodels>=0.14
-requests>=2.31
-pytest>=8
+# Community Cloud installs this file; use the validated deployment versions.
+-r requirements.lock

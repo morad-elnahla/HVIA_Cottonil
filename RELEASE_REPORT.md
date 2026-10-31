@@ -107,3 +107,21 @@ information. `.env` and the source/processed data were not edited.
   availability. Unsupported questions, budget limits and service failures remain
   possible and are disclosed in the response. Model prose remains conditional,
   not proof of causality or a guaranteed financial outcome.
+# Community Cloud data restore — 2026-10-31
+
+- Root cause: all `data/` artifacts are intentionally ignored by Git; source-only
+  deployments had no data source/bootstrap and entered the empty dashboard state.
+- Added private HTTPS snapshot restoration with required SHA-256, bounded download
+  and extraction, exact file allowlist, Parquet/JSON checks, immutable versioned
+  activation and safe error codes. Local data and saved models remain unchanged.
+- Cloud installs the validated lock through `requirements.txt`. Existing root-level
+  Streamlit secrets supply Groq environment settings. Snapshot mode avoids UI
+  uploads/retraining; all pages read the same complete saved bundle.
+- Local verification: **268 passed, 2 training tests deselected, 28 warnings**.
+  Includes cold start into an empty directory using actual saved data through a
+  mocked download, all nine pages, forecast byte equality, cache reuse, bad checksum,
+  HTTP authorization rejection, unsafe/incomplete ZIP and invalid content rejection.
+- Private deployment artifact generated locally under ignored `dist/`; not published.
+- Still unverified: actual Community Cloud deployment/host memory and external data
+  credentials, plus live Groq on that host. Need the app URL and authorized private
+  snapshot endpoint/secrets. Offline mocks are not proof of remote connectivity.

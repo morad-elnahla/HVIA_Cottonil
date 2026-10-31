@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src import data, insights, inventory as inv, metrics as M, models, ui
+from src import bootstrap, data, insights, inventory as inv, metrics as M, models, ui
 from src.assistant import Assistant, Ctx
 from src.data import CH_AR
 from src.ui import AMBER, BLUE, MINT, RED, esc
@@ -901,6 +901,9 @@ def page_health(D, F):
         H(ui.note(f"<b>نموذج العملاء:</b> AUC = {cm['auc']} (التخمين 0.5). " + ("مفيد." if cm.get("predictive") else "مش بيتنبأ أحسن من التخمين فمش بنستخدمه في القرارات."), "" if cm.get("predictive") else "warn"))
     st.write("")
     H(ui.sect("تحديث البيانات"))
+    if bootstrap.settings(st.secrets).get("BI_DATA_URL"):
+        st.caption("نسخة نشر محفوظة: تحديث البيانات والتوقعات بيتم بنشر حزمة جديدة، بدون إعادة تدريب على السيرفر.")
+        return
     reason = data.needs_rebuild()
     if reason:
         H(ui.note(esc(reason), "warn"))
@@ -946,6 +949,13 @@ def empty_state():
 
 
 def main():
+    try:
+        with st.spinner("بجهّز نسخة البيانات المحفوظة..."):
+            data.PROC = bootstrap.ensure(data.PROC, bootstrap.settings(st.secrets))
+    except bootstrap.BundleError as exc:
+        st.error("تعذر تجهيز بيانات النشر. راجع إعدادات مصدر البيانات في Secrets.")
+        st.code(str(exc))
+        return
     if not (data.PROC / "sales.parquet").exists():
         empty_state()
         return

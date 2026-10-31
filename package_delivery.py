@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent
 SOURCE_FILES = (
     "app.py", "requirements.txt", "requirements.lock", "README.md", ".env.example", ".gitignore",
     "Dockerfile", ".dockerignore", "DEPLOYMENT.md", "RELEASE_REPORT.md", "release_check.py", "live_acceptance.py",
-    "package_delivery.py", ".streamlit/config.toml", "photo/1.png",
+    "package_delivery.py", "package_cloud_data.py", "src/bootstrap.py", "tests/test_bootstrap.py", ".streamlit/config.toml", "photo/1.png",
     "src/__init__.py", "src/assistant.py", "src/data.py", "src/insights.py",
     "src/inventory.py", "src/llm.py", "src/metrics.py", "src/models.py", "src/ui.py", "src/health.py",
     "tests/conftest.py", "tests/test_core.py", "tests/test_assistant_regression.py", "tests/test_release.py", "tests/README.md",

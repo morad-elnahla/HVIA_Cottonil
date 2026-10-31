@@ -6,6 +6,10 @@
 
 ### مركز قيادة الأعمال · Arabic Business Intelligence
 
+**Streamlit Community Cloud:** data is private and excluded from Git. Configure
+the automatic verified snapshot download in [DEPLOYMENT.md](DEPLOYMENT.md#streamlit-community-cloud-automatic-data-restore)
+to restore all pages and saved forecasts without manual UI uploads or retraining.
+
 ![Python](https://img.shields.io/badge/Python-3.13-5eeab0?style=for-the-badge&logo=python&logoColor=white&labelColor=111b18)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-5eeab0?style=for-the-badge&logo=streamlit&logoColor=white&labelColor=111b18)
 ![Groq](https://img.shields.io/badge/Groq-Optional_AI-5eeab0?style=for-the-badge&labelColor=111b18)
