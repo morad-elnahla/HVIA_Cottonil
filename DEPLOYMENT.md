@@ -1,8 +1,28 @@
+# Current Community Cloud deployment: bundled data
+
+The owner explicitly approved publishing the existing processed snapshot. All
+15 runtime files in `data/processed/` are now tracked, including saved forecasts,
+backtests, churn, quality checks and model metrics. Raw files, credentials and
+logs remain excluded. No data transformation or training was performed.
+
+Deploy repository `morad-elnahla/HVIA_Cottonil`, branch `main`, entrypoint `app.py`,
+Python 3.13. No upload or external data source is required. Leave `BI_DATA_URL`,
+`BI_DATA_SHA256` and `BI_DATA_TOKEN` unset to use the bundled snapshot. If previously
+configured, remove these data-source settings to avoid overriding bundled data.
+Set top-level `LLM_API_KEY` (or `GROQ_API_KEY`) and your tested `LLM_MODEL` in
+Streamlit Secrets. Without the key the dashboard works in local-assistant mode.
+
+The supplied URL `milestone1rag.streamlit.app` currently displays FinCon, not
+Cottonil; verify the actual Cottonil deployment URL before changing another app.
+
+The instructions below describe the optional private-snapshot deployment route;
+they are not required for the approved bundled-data deployment above.
+
 # Private deployment and handoff
 
 ## Streamlit Community Cloud (automatic data restore)
 
-Git deliberately excludes `data/`, including processed tables and saved forecasts.
+For source-only delivery archives, processed tables and saved forecasts are excluded.
 Community Cloud clones the repository, not your local disk. A source-only deploy
 therefore has no business data until a private snapshot source is configured.
 

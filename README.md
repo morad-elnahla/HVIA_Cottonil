@@ -6,9 +6,11 @@
 
 ### مركز قيادة الأعمال · Arabic Business Intelligence
 
-**Streamlit Community Cloud:** data is private and excluded from Git. Configure
-the automatic verified snapshot download in [DEPLOYMENT.md](DEPLOYMENT.md#streamlit-community-cloud-automatic-data-restore)
-to restore all pages and saved forecasts without manual UI uploads or retraining.
+**Streamlit Community Cloud:** the owner-approved processed dataset and saved
+forecasts are included in this repository. Deploy `main` → `app.py` with Python
+3.13; no data upload or rebuild is needed. Configure `LLM_API_KEY` and `LLM_MODEL`
+in Streamlit Secrets for Groq. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
 
 ![Python](https://img.shields.io/badge/Python-3.13-5eeab0?style=for-the-badge&logo=python&logoColor=white&labelColor=111b18)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-5eeab0?style=for-the-badge&logo=streamlit&logoColor=white&labelColor=111b18)
@@ -125,7 +127,7 @@ streamlit run app.py
 
 Open [localhost:8501](http://localhost:8501).
 
-**The GitHub repository deliberately contains no business data.** Without an authorized dataset, the application opens its data-setup screen rather than a populated dashboard. For the private delivery archive with approved processed data, extract the folder and run the same install/start commands; no rebuild is needed.
+**The repository includes the owner-approved processed dataset and saved forecasts.** A Git checkout runs without uploading or rebuilding data. Raw source files and credentials remain excluded. Source-only delivery ZIPs still omit data unless the explicit data-inclusion option is used.
 
 ## ✦ Environment & Groq
 

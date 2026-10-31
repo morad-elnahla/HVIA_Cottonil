@@ -1,0 +1,11 @@
+{
+ "churn": {
+  "auc": 0.502,
+  "auc_baseline": 0.498,
+  "base_rate": 0.26,
+  "predictive": false,
+  "window_days": 120,
+  "n_train": 194341,
+  "n_valid": 71649
+ }
+}

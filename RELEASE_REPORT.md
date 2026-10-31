@@ -125,3 +125,13 @@ information. `.env` and the source/processed data were not edited.
 - Still unverified: actual Community Cloud deployment/host memory and external data
   credentials, plus live Groq on that host. Need the app URL and authorized private
   snapshot endpoint/secrets. Offline mocks are not proof of remote connectivity.
+
+## Approved bundled-data deployment — 2026-10-31
+
+The owner explicitly authorized public publication of the existing dataset. The
+15 processed runtime files are tracked unchanged; raw inputs, credentials and logs
+remain excluded. This supersedes the private-source requirement above for the
+Git-based deployment. Tested an isolated export of the staged Git tree without
+.env or external data configuration: all nine pages rendered, and saved forecast,
+quality and churn results loaded successfully. No Groq calls or training ran.
+The actual Cottonil Cloud URL remains unknown: the supplied URL serves FinCon.

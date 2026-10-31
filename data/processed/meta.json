@@ -1,0 +1,73 @@
+{
+ "built_at": "2026-10-25 09:55",
+ "fingerprint": {
+  "sales_orders.csv": [
+   55292010,
+   1792760909
+  ],
+  "sales_order_items.csv": [
+   111756890,
+   1792760908
+  ],
+  "branches.csv": [
+   10341,
+   1792760892
+  ],
+  "products_catalog.csv": [
+   16313,
+   1792760905
+  ],
+  "customers.csv": [
+   5867413,
+   1792760893
+  ],
+  "monthly_stock.csv": [
+   7579160,
+   1792760903
+  ],
+  "sales_returns.csv": [
+   2379348,
+   1792760911
+  ],
+  "delivery_shipments.csv": [
+   8771398,
+   1792760895
+  ],
+  "employees.csv": [
+   42910,
+   1792760896
+  ],
+  "payroll.csv": [
+   829455,
+   1792760904
+  ],
+  "operating_expenses.csv": [
+   3112590,
+   1792760904
+  ],
+  "warehouses.csv": [
+   990,
+   1792760912
+  ],
+  "marketing_campaigns.csv": [
+   216750,
+   1792760902
+  ],
+  "purchase_order_items.csv": [
+   6657803,
+   1792760906
+  ],
+  "inventory_transfer_items.csv": [
+   4119017,
+   1792760900
+  ],
+  "inventory_transfers.csv": [
+   1766152,
+   1792760901
+  ]
+ },
+ "rows": 1138536,
+ "first_date": "2018-10-19",
+ "last_date": "2026-10-18",
+ "raw_dir": "C:\\Users\\2m\\Desktop\\cottonil_bi\\data\\raw\\COTTONIL_Data\\02_TABLES"
+}

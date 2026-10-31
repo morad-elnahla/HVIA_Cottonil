@@ -7,14 +7,33 @@
 *.key
 credentials*.json
 
-# Business data: never publish raw OR derived records
-data/
+# Raw data and unapproved artifacts remain local
+data/*
+!data/processed/
+data/processed/*
 *.parquet
 *.csv
 *.xlsx
 *.xls
 *.sqlite*
 *.db
+
+# User-approved runtime snapshot for Community Cloud
+!data/processed/sales.parquet
+!data/processed/branches.parquet
+!data/processed/products.parquet
+!data/processed/customers.parquet
+!data/processed/stock.parquet
+!data/processed/returns.parquet
+!data/processed/costs.parquet
+!data/processed/deliveries.parquet
+!data/processed/forecast.parquet
+!data/processed/backtest.parquet
+!data/processed/churn.parquet
+!data/processed/fquality.parquet
+!data/processed/meta.json
+!data/processed/health.json
+!data/processed/model_metrics.json
 
 # Python, environments, tools and caches
 __pycache__/
