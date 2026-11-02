@@ -21,7 +21,7 @@ AR_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو",
 USER = os.getenv("BI_USER_NAME", "مراد")
 
 
-@st.cache_data
+@st.cache_data(ttl=5)
 def deployed_revision():
     """Read the actual checkout, never infer deployed code from remote HEAD."""
     import subprocess
