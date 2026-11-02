@@ -2,47 +2,58 @@
 
 <br>
 
-[![COTTONIL BI & AI — animated title](https://readme-typing-svg.demolab.com?font=Syne&weight=750&size=36&duration=3000&pause=1500&color=5EEAB0&center=true&vCenter=true&width=850&lines=COTTONIL+BI+%26+AI;Arabic+Business+Intelligence;Data+%C2%B7+Evidence+%C2%B7+Decisions)](https://github.com/morad-elnahla/HVIA_Cottonil)
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Syne&weight=750&size=38&duration=3000&pause=1200&color=5EEAB0&center=true&vCenter=true&width=850&lines=COTTONIL+BI+%26+AI+%F0%9F%93%8A;Arabic+Business+Intelligence;Sales+%C2%B7+Inventory+%C2%B7+Forecasting+%C2%B7+AI;Data+%C2%B7+Evidence+%C2%B7+Decisions)](https://cotonil.streamlit.app/)
 
 ### مركز قيادة الأعمال · Arabic Business Intelligence
 
-**Streamlit Community Cloud:** the owner-approved processed dataset and saved
-forecasts are included in this repository. Deploy `main` → `app.py` with Python
-3.13; no data upload or rebuild is needed. Configure `LLM_API_KEY` and `LLM_MODEL`
-in Streamlit Secrets for Groq. See [DEPLOYMENT.md](DEPLOYMENT.md).
+<br>
 
-
-![Python](https://img.shields.io/badge/Python-3.13-5eeab0?style=for-the-badge&logo=python&logoColor=white&labelColor=111b18)
-![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-5eeab0?style=for-the-badge&logo=streamlit&logoColor=white&labelColor=111b18)
-![Groq](https://img.shields.io/badge/Groq-Optional_AI-5eeab0?style=for-the-badge&labelColor=111b18)
-![Status](https://img.shields.io/badge/Status-Private_Deployment_Candidate-f6b94d?style=for-the-badge&labelColor=111b18)
-
-> **From business records to measurable decisions — in Arabic.**
->
-> Sales, profitability, inventory, forecasting, and a conversational assistant grounded in local calculations.
-
-| Interface | Analytics | AI | Data | Release |
-|:---:|:---:|:---:|:---:|:---:|
-| Arabic · RTL · Dark theme | Pandas · Plotly | Groq + evidence review | Authorized local datasets | Tested private candidate |
-
-**Private deployment candidate. See [deployment instructions](DEPLOYMENT.md) and the [verification report](RELEASE_REPORT.md). No public instance has been published.**
+[![Python](https://img.shields.io/badge/Python-3.13-5eeab0?style=for-the-badge&logo=python&logoColor=white&labelColor=111b18)](https://python.org)
+[![Streamlit](https://img.shields.io/badge/Streamlit-Live-5eeab0?style=for-the-badge&logo=streamlit&logoColor=white&labelColor=111b18)](https://cotonil.streamlit.app/)
+[![Pandas](https://img.shields.io/badge/Pandas-Analytics-5eeab0?style=for-the-badge&logo=pandas&logoColor=white&labelColor=111b18)](https://pandas.pydata.org)
+[![Plotly](https://img.shields.io/badge/Plotly-Charts-5eeab0?style=for-the-badge&logo=plotly&logoColor=white&labelColor=111b18)](https://plotly.com)
+[![Groq](https://img.shields.io/badge/Groq-AI_Assistant-5eeab0?style=for-the-badge&labelColor=111b18)](https://groq.com)
+[![Tests](https://img.shields.io/badge/Tests-260_Passed-f6b94d?style=for-the-badge&labelColor=111b18)](RELEASE_REPORT.md)
 
 <br>
+
+> **From business records to measurable decisions — in Arabic.**
+
+> **Every number is calculated locally. AI explains — it never invents figures.**
+
+<br>
+
+| 🖥️ Interface | 📊 Analytics | 🤖 AI | 📈 Forecasting | 🗄️ Data | ✅ Release |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Arabic · RTL · Dark** | **Pandas · Plotly** | **Groq + evidence review** | **12-origin backtesting** | **Authorized datasets** | **260 tests passed** |
+
+<br>
+
+## [🚀 Try the Live Demo →](https://cotonil.streamlit.app/)
+
+<sub>[cotonil.streamlit.app](https://cotonil.streamlit.app/)</sub>
+
 </div>
 
 ---
 
 ## ✦ Dashboard Preview
 
-![Cottonil BI dashboard — overview, KPIs, and recommendations](photo/1.png)
+<p align="center">
+  <a href="https://cotonil.streamlit.app/"><img src="photo/1.png" width="100%" alt="Cottonil BI dashboard — overview, KPIs, and recommendations"></a>
+</p>
 
-*Project screenshot provided for the repository. Displayed figures are a snapshot, not live results or performance guarantees.*
+<p align="center"><sub>Screenshot snapshot — figures are illustrative, not live results. <a href="https://cotonil.streamlit.app/">Open the live app</a> to explore.</sub></p>
+
+---
 
 ## ✦ What Is Cottonil BI?
 
 Cottonil BI is a local Streamlit application for exploring retail performance. It connects sales, branch profitability, inventory coverage, customer analysis, and recommendations in an Arabic dashboard.
 
 The assistant resolves Arabic requests into evidence domains, gathers facts with local analytical tools, and keeps the latest answer and its decision options for referenced follow-ups. Groq is used for reviewed interpretation of strategic single- or multi-domain requests when configured; deterministic tools remain the source of business numbers, dates, and scope.
+
+---
 
 ## ✦ What's Inside
 
@@ -59,6 +70,8 @@ The assistant resolves Arabic requests into evidence domains, gathers facts with
 | Data Health | Data-quality findings, model diagnostics, and explicit rebuild controls |
 
 Filters apply according to each page's stated scope. Recommendations and forecasting are not automatically restricted by every sales-page filter.
+
+---
 
 ## ✦ How the Assistant Works
 
@@ -88,6 +101,8 @@ Example prompts — actual results depend on the available data:
 
 The assistant supports common Arabic wording and uses a local fallback when a request cannot be safely interpreted; arbitrary phrasing is not guaranteed. Review the displayed metric, dates, scope, and source. Relative dates use the **last date in the dataset**, not necessarily today. Requests for the last N months use calendar-month offsets ending at the last recorded date.
 
+---
+
 ## ✦ Forecasting
 
 - Forecasts are available at company, category, branch, and product levels.
@@ -95,6 +110,8 @@ The assistant supports common Arabic wording and uses a local fallback when a re
 - Revenue is derived from expected quantity and price, with a configurable January price-increase assumption.
 - Forecast intervals, historical average error, and reliability labels are separate indicators; none guarantees future accuracy.
 - The current incomplete month can be estimated explicitly. Results change when the authorized dataset is rebuilt.
+
+---
 
 ## ✦ Quick Start
 
@@ -129,6 +146,8 @@ Open [localhost:8501](http://localhost:8501).
 
 **The repository includes the owner-approved processed dataset and saved forecasts.** A Git checkout runs without uploading or rebuilding data. Raw source files and credentials remain excluded. Source-only delivery ZIPs still omit data unless the explicit data-inclusion option is used.
 
+---
+
 ## ✦ Environment & Groq
 
 Groq is optional. Local analysis works without an API key.
@@ -157,6 +176,8 @@ LLM_TPM_LIMIT=7000
 
 When enabled, Groq receives the question, relevant conversation context, and selected calculated results for optional summaries. Use only data permitted for that service. Local diagnostics are written under `logs/`; logs are excluded from GitHub and delivery archives.
 
+---
+
 ## ✦ Data & Rebuilding
 
 There are two supported local setups:
@@ -173,6 +194,8 @@ The same rebuild is available on **Data Health**. It rebuilds derived data and m
 Core source tables are `sales_orders`, `sales_order_items`, `branches`, and `products_catalog`. Additional source tables support inventory, customers, returns, payroll, and deliveries. Processed forecasts require `forecast.parquet`, `fquality.parquet`, and `backtest.parquet`; the delivery script validates the complete processed bundle when inclusion is requested.
 
 Raw data, processed data, customer records, local metadata, credentials, and logs are not published in this repository. Missing payroll or unreliable source fields can limit profitability and other analyses; read the in-app quality notes. Customer-model quality and forecast uncertainty should not be treated as guaranteed predictions.
+
+---
 
 ## ✦ Private Delivery ZIP
 
@@ -192,6 +215,8 @@ python package_delivery.py --include-processed --confirm-data-sharing --dry-run
 Windows Desktop redirection, including OneDrive, is respected. `--output-dir PATH` optionally overrides the destination. Archives include a `Cottonil_BI/` top-level folder and a delivery note. Raw data, `.env`, logs, caches, virtual environments, and ad hoc API utilities are never included. Offline regression tests and release checks are included. No ZIP is uploaded to GitHub.
 
 **Only use the data-inclusion option when all processed files are approved for the specific recipient.** Processed data can still contain private customer and commercial information. A source-only ZIP is not a populated, data-ready dashboard.
+
+---
 
 ## ✦ Project Structure
 
@@ -226,6 +251,8 @@ HVIA_Cottonil/
 
 `data/`, `logs/`, and `.env` remain local and are ignored by Git.
 
+---
+
 ## ✦ Release Status & Validation
 
 The release candidate includes an exact dependency lock, offline regression tests,
@@ -252,3 +279,17 @@ ROI ranking or an optimized budget allocation.
 
 Deploy privately or behind an authenticated HTTPS gateway. This repository does
 not provide application login or claim that arbitrary questions are always understood.
+
+---
+
+<div align="center">
+
+### [🚀 Open Cottonil BI Live](https://cotonil.streamlit.app/)
+
+<br>
+
+**Built by [Morad Elnahla](https://github.com/morad-elnahla)** · ⭐ Star the repo if you find it useful
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:111b18,100:5eeab0&height=110&section=footer" width="100%"/>
+
+</div>
