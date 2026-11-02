@@ -170,3 +170,20 @@ one selected priority referencing 19.23% unidentified sales, identical source an
 scope, no split, no API calls. Regression cases include topic switching and full
 customer identification (no unsupported missing-ID action). Cloud execution was
 not tested for this change.
+
+## Narrative requests and decision evaluation — 2026-11-02
+
+Separated referential analysis clauses from independent data commands. Customer
+narratives now retain their evidence, scope and action requirements as one
+operation across punctuation variants. Financial profit/margin requests remain
+separate measured quantities. Decision follow-ups recognize selection language
+and singular/postfix action counts; future evaluation horizons no longer overwrite
+historical filters. Evidence-linked decision options include measurement protocols,
+with historical baselines distinguished from future outcomes and unmeasured costs.
+
+Validation: full offline suite 293 passed, 2 training tests deselected, 32 warnings;
+one additional real-data regression passed independently after that run. Coverage
+includes four punctuation variants, four domain references, independent commands,
+cardinality versus horizon, and the exact reported two-turn real-data interaction.
+No API calls, data changes or training. Cloud behavior remains unverified. The
+planner remains rule-assisted, not a guarantee of unrestricted language understanding.

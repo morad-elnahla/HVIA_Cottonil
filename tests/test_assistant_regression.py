@@ -962,3 +962,44 @@ def test_customer_action_candidates_depend_on_available_evidence(assistant):
     assert len(first.actions) == 2
     assert not any('حسّن تسجيل' in x for x in first.actions)
     assert any('المتاح 2' in x for x in first.notes)
+
+@pytest.mark.parametrize('joiner', ['، ', '. ', '\n', '؛ '])
+def test_narrative_evidence_is_one_request_across_punctuation(assistant, joiner):
+    question = joiner.join(['عندنا مبيعات كتير من غير بيانات عملاء', 'وفي نفس الوقت جزء كبير من الإيرادات جاي من عدد قليل من العملاء', 'حلل الوضع خلال آخر 12 شهر', 'واقترح 3 إجراءات واقعية لتحسين الاحتفاظ بالعملاء بأقل تكلفة مع توضيح الأرقام اللي بنيت عليها قراراتك'])
+    result = assistant.ask_local(question)
+    assert not result.parts and len(result.actions) == 3
+    assert result.decision_topic == 'customers'
+    assert 'آخر 12 شهر' in result.source['الفترة']
+    follow = assistant.ask_local('طيب لو الميزانية تسمح بتنفيذ إجراء واحد بس من التلاتة اللي اقترحتهم، تختار أنهي واحد وليه؟ وإزاي نقيس نجاحه بعد 3 شهور؟')
+    assert not follow.parts and len(follow.actions) == 1
+    assert len(follow.facts) == 1 and 'بعد 3 شهور' in follow.facts[0]
+    assert 'خط الأساس' in follow.facts[0] and 'الفواتير' in follow.facts[0]
+    assert follow.source == result.source
+    assert not follow.table
+
+
+@pytest.mark.parametrize('topic', ['المبيعات', 'المخزون', 'التوقعات', 'صحة البيانات'])
+def test_referential_analysis_clause_keeps_its_owner(topic):
+    parts = Assistant.split_parts(f'اعرض {topic}، حلل الوضع ووضح النتائج')
+    assert len(parts) == 1
+
+
+def test_independent_commands_remain_separate():
+    parts = Assistant.split_parts('حلل العملاء. اعرض صحة البيانات')
+    assert len(parts) == 2
+
+
+@pytest.mark.parametrize('text,expected', [('إجراء واحد بس بعد 3 شهور', 1), ('خطوة واحدة', 1), ('3 إجراءات', 3), ('بعد 3 شهور', None)])
+def test_action_cardinality_is_not_evaluation_horizon(text, expected):
+    assert result_count(text) == expected
+
+def test_real_narrative_and_evaluation_horizon():
+    a = Assistant(data.load(), client=GroqClient(Settings(enabled=False)))
+    first = a.ask_local('عندنا مبيعات كتير من غير بيانات عملاء، وفي نفس الوقت جزء كبير من الإيرادات جاي من عدد قليل من العملاء. حلل الوضع خلال آخر 12 شهر، واقترح 3 إجراءات واقعية لتحسين الاحتفاظ بالعملاء بأقل تكلفة، مع توضيح الأرقام اللي بنيت عليها قراراتك.')
+    assert not first.parts and len(first.actions) == 3
+    follow = a.ask_local('طيب لو الميزانية تسمح بتنفيذ إجراء واحد بس من التلاتة اللي اقترحتهم، تختار أنهي واحد وليه؟ وإزاي نقيس نجاحه بعد 3 شهور؟')
+    assert not follow.parts and len(follow.actions) == 1
+    assert '19.23%' in follow.facts[0]
+    assert 'بعد 3 شهور' in follow.facts[0]
+    assert first.source == follow.source
+    assert '2025-10-19' in follow.source['الفترة']

@@ -85,11 +85,14 @@ def result_count(text: str) -> int | None:
              "ثلاث": 3, "ثلاثه": 3, "تلات": 3, "تلاته": 3, "اربع": 4, "اربعه": 4,
              "خمس": 5, "خمسه": 5, "ست": 6, "سته": 6, "سبع": 7, "سبعه": 7,
              "ثمان": 8, "ثماني": 8, "ثمانيه": 8, "تسع": 9, "تسعه": 9, "عشر": 10, "عشره": 10}
-    nouns = r"(?:خطوات|خطوه|مشاكل|مشكلات|مشكله|توصيات|توصيه|اولويات|تدخلات|اجراءات|فرص|فروع|فرع|عملاء|عميل|منتجات|منتج|اصناف|صنف|فحوصات|فحوص|فحص|ملاحظات|ملاحظه|انواع|نوع|نتائج|نتيجه)"
+    nouns = r"(?:خطوات|خطوه|مشاكل|مشكلات|مشكله|توصيات|توصيه|اولويات|تدخلات|اجراءات|اجراء|فرص|فروع|فرع|عملاء|عميل|منتجات|منتج|اصناف|صنف|فحوصات|فحوص|فحص|ملاحظات|ملاحظه|انواع|نوع|نتائج|نتيجه)"
     match = re.search(r"\b(\d+|" + "|".join(words) + r")\s+(?:ال)?" + nouns + r"\b", n)
     if match:
         value = int(match[1]) if match[1].isdigit() else words[match[1]]
         return value if value > 0 else None
+    postfix = re.search(nouns + r"\s+(واحد|واحده|اثنين|اتنين)\b", n)
+    if postfix:
+        return words[postfix[1]]
     for token in n.split():
         token = re.sub(r"^(?:و)?(?:ال)?", "", token)
         if re.fullmatch(r"(?:مشكل|توصي|اولوي|ملاحظ|نتيج|فرص)(?:تان|تين)|(?:فرع|عميل|منتج|صنف|فحص|نوع|تدخل|اجراء)(?:ان|ين)", token):
@@ -508,6 +511,10 @@ class Assistant:
             topic = Assistant.topic_of(clean)
             previous = Assistant.topic_of(result[-1]) if result else None
             command = bool(re.match(r"و?(?:حلل|اعرض|احسب|قارن|توقع|هات|اقترح)\b", clean))
+            # Descriptions and commands referring to preceding evidence do not
+            # introduce independent data operations, irrespective of punctuation.
+            referential = topic is None and command and bool(re.search(
+                r"\b(?:الوضع|ذلك|ده|دي|النتائج|الارقام|الموضوع)\b", clean))
             dependent = (previous == "forecast" and Assistant.forecast_explanation_fields(clean)
                          and topic in (None, "forecast", "inventory"))
             dependent |= (previous == "customers" and not command and
@@ -524,7 +531,8 @@ class Assistant:
             dependent |= (previous == "health" and not command and
                           kw(toks(clean), "اثر", "تاثير", "موثوق", "مؤشرات", "تحليلات"))
             # Lists of dates, entities, evidence and actions are fields, not tools.
-            if result and (dependent or (topic is None and not command and
+            if result and (referential or (not command and topic == previous == "customers")
+                           or dependent or (topic is None and not command and
                             not kw(toks(clean), "ليه", "لماذا", "سبب", "هامش", "ربح"))):
                 result[-1] += "، " + clean
             else:
@@ -698,10 +706,15 @@ class Assistant:
         n = self.requested_text(text)
         previous = getattr(self, "last_answer", None)
         action_request = bool(re.search(r"اجراء|خطو[هة]|خطوات|تدخل|توصي", n))
-        prioritize = bool(re.search(r"اختار|اختر|اهم|اولوي|نبدا|نبدأ", n))
+        prioritize = bool(re.search(r"اختار|تختار|اختر|اهم|اولوي|نبدا|نبدأ", n))
         reference = bool(re.search(r"دي|ده|السابق|لسه|منها|من الاجراءات|من الخطوات|طيب|طب ", n))
         if previous is not None and getattr(previous, "decision_options", []) and action_request and prioritize and reference:
-            spec = self.parse(text)
+            # A future evaluation horizon belongs to the proposed experiment,
+            # not to the historical data filters of the evidence being reused.
+            measurement = bool(re.search(r"نقيس|قياس|نجاح|متابعه|تقييم", n))
+            horizon = re.search(r"بعد\s+(\d+)\s+(شهور|اشهر|شهر|اسابيع|اسبوع|ايام|يوم)", n) if measurement else None
+            scope_text = n[:horizon.start()] + n[horizon.end():] if horizon else text
+            spec = self.parse(scope_text)
             if (spec["topic"] in (None, previous.decision_topic) and spec["per"] is None
                     and not any(spec["ent"].values())):
                 count = result_count(text) or 1
@@ -712,6 +725,12 @@ class Assistant:
                     source=deepcopy(previous.source))
                 answer.decision_options = deepcopy(previous.decision_options)
                 answer.decision_topic = previous.decision_topic
+                if measurement:
+                    duration = f"بعد {horizon[1]} {horizon[2]} من بدء التنفيذ" if horizon else "بعد فترة متابعة تُحدد قبل التنفيذ"
+                    answer.facts = ["خطة قياس مقترحة " + duration + ": " + o.get("measurement",
+                        "حدد مؤشر النتيجة وخط الأساس وتكلفة الإجراء، وقارن بمجموعة مماثلة قبل الحكم على أثره.") for o in options]
+                    answer.notes.append("فترة المتابعة مستقبلية وليست بيانات متاحة بالفعل؛ لا توجد نتيجة نجاح محسوبة أو نسبة تحسن مضمونة.")
+                    answer.text = answer._compose()
                 self.last_answer = deepcopy(answer)
                 return answer
         visual_terms = r"(?:\b(?:جراف|جرافيك|شارت|chart|charts|dashboard|داشبورد)\b|داش\s+بورد|رسم\s+بياني|رسوم\s+بيانيه|لوحه\s+(?:تحكم|بيانيه))"
@@ -1484,6 +1503,18 @@ class Assistant:
                 reason=f"أكبر 10% يساهمون بـ{top_sales / identified * 100:.2f}% من مبيعات العملاء المعروفين. التركّز يبرر اختبارًا محدودًا، لكنه لا يثبت أنهم معرضون للمغادرة أو أن التواصل سيحسن رجوعهم."))
         options.append(dict(action="قِس أثر تجربة الاحتفاظ بمقارنة مجموعة تتلقى الإجراء وأخرى مماثلة لا تتلقاه، مع تحديد فترة القياس والتكلفة قبل التنفيذ.",
             reason="تقييم Churn المحفوظ لا يثبت أثر أي تدخل؛ نحتاج سجل التواصل والموافقات وتكلفة التنفيذ ومشتريات لاحقة لقياس الرجوع والربحية، بدل اعتبار التنبؤ سببًا أو أثرًا مضمونًا."))
+        for option in options:
+            if option["action"].startswith("حسّن تسجيل"):
+                option["measurement"] = (f"خط الأساس التاريخي: {missing / total * 100:.2f}% من صافي المبيعات بلا معرّف عميل. "
+                    "قِس نفس النسبة أسبوعيًا بنفس تعريف صافي المبيعات، ومعها نسبة الفواتير المرتبطة بمعرّف صالح. "
+                    "حدد خط أساس للفواتير قبل التنفيذ لأنه غير محسوب هنا، وراجع صحة المعرّفات والتكرار ووقت التسجيل. "
+                    "قارن بفروع مماثلة لم تطبق الإجراء؛ تحسن التسجيل لا يثبت تحسن الاحتفاظ، الذي يحتاج متابعة إعادة الشراء لمجموعات متكافئة.")
+            elif option["action"].startswith("اختبر تواصل"):
+                option["measurement"] = ("قسّم عينة العملاء المؤهلين عشوائيًا إلى تواصل ومجموعة مقارنة، "
+                    "وقارن نسبة إعادة الشراء وربح البيع بعد تكلفة التواصل؛ سجل الموافقات والتكلفة، ولا تستخدم تركّز المبيعات كمعدل احتفاظ.")
+            else:
+                option["measurement"] = ("راجع اكتمال سجل الإجراء والمجموعة المقارنة والتكلفة، ثم احسب فرق إعادة الشراء والربحية "
+                    "لنفس نافذة المتابعة؛ اعرض حجم العينة وعدم اليقين، ولا تعتبر معدل رجوع عينة Churn خط أساس مطابقًا تلقائيًا.")
         answer.decision_options = options
         answer.decision_topic = "customers"
         requested = self.requested_text(sp["text"])
