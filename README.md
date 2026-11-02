@@ -42,7 +42,7 @@ in Streamlit Secrets for Groq. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Cottonil BI is a local Streamlit application for exploring retail performance. It connects sales, branch profitability, inventory coverage, customer analysis, and recommendations in an Arabic dashboard.
 
-The assistant combines Arabic parsing rules, conversation context, optional Groq planning, and deterministic calculations. **Groq does not supply the business numbers:** results are calculated from the selected dataset and shown with their period and scope.
+The assistant resolves Arabic requests into evidence domains, gathers facts with local analytical tools, and keeps the latest answer and its decision options for referenced follow-ups. Groq is used for reviewed interpretation of strategic single- or multi-domain requests when configured; deterministic tools remain the source of business numbers, dates, and scope.
 
 ## ✦ What's Inside
 
@@ -64,11 +64,11 @@ Filters apply according to each page's stated scope. Recommendations and forecas
 
 | Step | What happens |
 |:---|:---|
-| **1. Understand** | Identify metric, entities, dates and dependencies; a selected branch set stays bound to its comparisons and per-branch plans |
-| **2. Keep context** | Supported follow-ups inherit the previous governorate, period, and filters; explicit new instructions take precedence |
-| **3. Calculate** | Local modules calculate totals, period changes, and branch contributions from filtered records |
-| **4. Explain** | Locally calculated facts are separate from Groq's conditional interpretations; generated analysis is reviewed against the evidence |
-| **5. Decide and disclose** | Per-branch plans explain the recorded issue, uncertainty and operational priority. Local alternatives and unavailable AI interpretation are explicitly labelled |
+| **1. Understand** | Resolve the requested measures, entities and connected evidence domains before splitting independent operations; selected branches remain bound across dependent evidence |
+| **2. Keep context** | Preserve the latest structured answer, scope, source and decision options; follow-ups refer to that answer, while explicit new topics route independently |
+| **3. Calculate** | Local modules calculate every business value from the selected records; model output never supplies totals, rankings or measured changes |
+| **4. Explain** | Groq drafts conditional interpretations from the relevant local evidence and a separate review checks the result; unsupported or unavailable analysis is not presented as completed |
+| **5. Decide and disclose** | Evidence-backed local options remain available as fallback and are retained for follow-up measurement; operational priority is not presented as measured ROI |
 
 Profit value in assistant answers means **sales profit before payroll and operating expenses**, unless another measure is explicitly stated. It is different from profit-margin percentage.
 
@@ -86,7 +86,7 @@ Example prompts — actual results depend on the available data:
 اقترح خطتين مختلفتين، واحدة لكل فرع، وحدد أولوية التنفيذ وليه.
 ```
 
-The assistant has specific parsing rules and is still being improved; arbitrary wording is not guaranteed. Review the displayed metric, dates, scope, and source. Relative dates use the **last date in the dataset**, not necessarily today. Requests for the last N months use calendar-month offsets ending at the last recorded date.
+The assistant supports common Arabic wording and uses a local fallback when a request cannot be safely interpreted; arbitrary phrasing is not guaranteed. Review the displayed metric, dates, scope, and source. Relative dates use the **last date in the dataset**, not necessarily today. Requests for the last N months use calendar-month offsets ending at the last recorded date.
 
 ## ✦ Forecasting
 

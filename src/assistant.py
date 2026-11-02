@@ -843,7 +843,11 @@ class Assistant:
     def _answer(self, text: str, use_llm: bool) -> Answer:
         """Resolve each clause once. Groq can resolve ambiguity, never override intent."""
         domains = self.analysis_domains(text)
-        if domains:
+        # Simple, single-domain lookups stay local. A strategic single-domain
+        # request uses the same evidence-first synthesis path as cross-domain work
+        # when Groq is actually available; local decisions remain the fallback.
+        synthesis_enabled = bool(use_llm and self.client.configured and self.client.cfg.narrate != "off")
+        if domains and (len(domains) > 1 or synthesis_enabled):
             ans = self.analyze_evidence(text, domains, use_llm)
             self.turns = (self.turns + [{"role": "user", "content": text},
                           {"role": "assistant", "content": ans.text[:500]}])[-6:]
@@ -1860,7 +1864,7 @@ class Assistant:
 
     @staticmethod
     def analysis_domains(text: str) -> list[str]:
-        """A relationship request owns its evidence and action fields, before splitting."""
+        """Resolve the evidence domains for a connected analytical workflow."""
         n = Assistant.requested_text(text)
         relationship = bool(re.search(r"اربط|يربط|ربط|علاقه|ارتباط|تاثير.+(?:علي|ب)|مرتبط", n))
         # A selected entity set followed by comparisons/plans is one dependent
@@ -1868,8 +1872,7 @@ class Assistant:
         entity_workflow = bool(re.search(r"فروع|فرع(?:ين|ان)?\b", n)
                                and re.search(r"كل فرع|لكل فرع|اداء كل|واحده لكل", n)
                                and re.search(r"قارن|مقارنه|حلل|تحليل", n))
-        if not (relationship or entity_workflow):
-            return []
+        customer_owned = Assistant.customer_owned_request(n)
         domains = []
         for domain, pattern in {
             "sales": r"مبيعات|ايرادات|فروع|فرعين|فرعان",
@@ -1881,6 +1884,10 @@ class Assistant:
             "health": r"(?:جوده|صحه)\s+البيانات",
         }.items():
             if re.search(pattern, n):
+                # Data quality mentioned as an outcome inside a customer task is
+                # not a request to run the company-wide data-health tool.
+                if domain == "health" and customer_owned:
+                    continue
                 domains.append(domain)
         # Discount evidence already contains scoped margin rates. Do not demand
         # an extra profit tool/citation when no profit-value measure was asked.
@@ -1888,8 +1895,15 @@ class Assistant:
         asks_profit_value = bool(re.search(r"(?:^|\s)و?(?:ال)?(?:ربح|ارباح)\b", without_margin))
         if "discount" in domains and "profit" in domains and "هامش" in n and not asks_profit_value:
             domains.remove("profit")
+        # A single-domain diagnosis with requested actions is still analysis, not
+        # merely a lookup. Keep descriptive requests on their existing local tool.
+        action_request = bool(re.search(r"اقترح|حلول|اجراءات|خطوات|خطه|خطط|تحسين", n))
+        analytical_request = bool(re.search(r"حلل|تحليل|مشكل|تاثير|اثر|اداء|علاقه", n))
+        single_domain_strategy = (len(domains) == 1 and action_request and analytical_request)
+        if single_domain_strategy and domains[0] != "health":
+            return domains
         # Health-impact explanations already have a dedicated evidence handler.
-        return domains if len(domains) >= 2 and "health" not in domains else []
+        return domains if (relationship or entity_workflow) and len(domains) >= 2 and "health" not in domains else []
 
     def select_analysis_branches(self, base, text):
         """Resolve the ranked entity set before any evidence tool runs."""
@@ -2022,7 +2036,12 @@ class Assistant:
                                 and re.search(r"لكل فرع|كل فرع|واحده لكل", n))
         wants_plan = bool(re.search(r"خطه|خطوات|اقترح|اجراء", n))
         step_match = re.search(r"(?:\d+|ثلاثه?|تلاته?|اربع[ه]?|خمس[ه]?|اثنين|اتنين)\s+خطو(?:ات|ه)", n)
-        steps = (result_count(step_match[0]) if step_match else None) or (2 if re.search(r"خطوت(?:ان|ين)", n) else 3 if wants_plan else 0)
+        requested_steps = (result_count(step_match[0]) if step_match else None) or (2 if re.search(r"خطوت(?:ان|ين)", n) else 3 if wants_plan else 0)
+        local_options = next((deepcopy(e["decision_options"]) for e in evidence if e.get("decision_options")), [])
+        local_decision_request = bool(len(domains) == 1 and local_options and wants_plan and not per_branch_plans)
+        # Do not ask the model to recreate a local, evidence-backed decision list.
+        # Groq interprets the evidence; the executable options stay stable for follow-up.
+        steps = 0 if local_decision_request else requested_steps
         if per_branch_plans:
             steps = 0  # Each selected branch owns a locally evidenced decision plan.
         if steps > 10:
@@ -2099,6 +2118,14 @@ class Assistant:
                 ans.llm_note = reason + "؛ المعروض أدلة محلية فقط، ولم يكتمل الربط التحليلي أو إعداد الخطة."
         else:
             ans.llm_note = "الصياغة التحليلية عبر Groq غير مفعّلة؛ المعروض أدلة محلية فقط، وليس تحليلاً سببياً أو خطة مكتملة."
+        if local_decision_request:
+            ans.decision_options = deepcopy(local_options)
+            ans.decision_topic = domains[0]
+            ans.actions = [option["action"] + " الأساس: " + option["reason"]
+                           for option in local_options[:requested_steps]]
+            if requested_steps > len(local_options):
+                ans.notes.append(f"المتاح {len(local_options)} إجراءات مسندة للأدلة من أصل {requested_steps} مطلوبة؛ لم أضف إجراءات بلا أساس.")
+            ans.notes.append("الإجراءات مستمدة من المؤشرات المحلية؛ ترتيبها تشغيلي وليس عائدًا ماليًا محسوبًا.")
         if per_branch_plans:
             ans.actions = self.branch_action_plans(evidence, selected)
             ans.headline = "مقارنة الفروع المختارة وخطة مستقلة لكل فرع"
@@ -2211,6 +2238,7 @@ class Assistant:
                                "critical_categories": totals["critical"], "low_categories": totals["low"], "overstock_categories": totals["over"]}
             evidence.append({"id": domain, "headline": answer.headline, "facts": answer.facts, "metrics": metrics,
                              "forecasts": answer.forecasts, "limits": answer.notes,
+                             "decision_options": deepcopy(answer.decision_options),
                              "source": answer.source,
                              "table": answer.table.head(12).to_dict("records") if answer.table is not None else []})
         return evidence

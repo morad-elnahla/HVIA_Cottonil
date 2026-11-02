@@ -10,7 +10,7 @@ from src.llm import GroqClient, Settings
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true", help="Authorize the external Groq requests for this check")
-    parser.add_argument("--scenario", choices=("ranked-comparison", "branch-plans"), default="ranked-comparison")
+    parser.add_argument("--scenario", choices=("ranked-comparison", "branch-plans", "customer-quality"), default="ranked-comparison")
     args = parser.parse_args()
     if not args.live:
         parser.error("Use --live explicitly; this command consumes Groq tokens.")
@@ -31,19 +31,33 @@ def main():
         question = ("أنا مدير Cottonil وعندي ميزانية محدودة لتحسين أداء الفروع. اختار أضعف فرعين من حيث نمو المبيعات خلال آخر 12 شهر، "
                     "وقارن أداء كل فرع بمخزونه وخصوماته وهامش ربحه. حدد المشكلة الأهم في كل فرع بناءً على الأدلة، ووضح إيه المؤكد وإيه مجرد احتمال. "
                     "في النهاية اقترح خطتين عمليتين مختلفتين، واحدة لكل فرع، وحدد أولوية التنفيذ وليه. استخدم أرقام فعلية ومصادرها، ومش عايز مجرد عرض جداول.")
+    elif args.scenario == "customer-quality":
+        expected = 3
+        question = ("حلل مشكلة نقص بيانات العملاء في Cottonil خلال آخر 12 شهر، وتأثيرها على فهم سلوكهم، "
+                    "واقترح 3 حلول عملية لتحسين جودة البيانات والاحتفاظ بالعملاء، ورتبها حسب الأولوية.")
     answer = assistant.ask(question)
     checks = {"reviewed_synthesis": answer.mode.startswith("Groq") and not answer.llm_note,
-              "requested_action_count": len(answer.actions) == expected,
-              "requested_distinct_branches": answer.table is not None and answer.table["الفرع"].nunique() == expected}
+              "requested_action_count": len(answer.actions) == expected}
+    if args.scenario == "customer-quality":
+        checks["local_customer_evidence"] = bool(answer.facts and "customers" in answer.source)
+        checks["saved_decision_options"] = len(answer.decision_options) == expected
+        calls_after_synthesis = client.stats["calls"]
+        follow = assistant.ask("من الحلول دي اختار واحد نبدأ به لو الميزانية محدودة، وحدد 3 مؤشرات نقيس بها النجاح خلال 90 يوم.")
+        checks["followup_uses_same_evidence"] = follow.source == answer.source and not follow.parts
+        checks["followup_one_action_three_kpis"] = len(follow.actions) == 1 and follow.table is not None and len(follow.table) == 3
+        checks["no_extra_api_for_followup"] = client.stats["calls"] == calls_after_synthesis
+    else:
+        checks["requested_distinct_branches"] = answer.table is not None and answer.table["الفرع"].nunique() == expected
     calls_after_synthesis = client.stats["calls"]
-    for question, intent in [("حلل العملاء آخر 12 شهر", "customers"),
-                             ("إيه أهم مشكلتين محتاجين تدخل عاجل؟", "recommend"),
-                             ("سيبنا من التوصيات. عايز أخطر 3 مشاكل في جودة البيانات وتأثيرها على التحليلات", "health")]:
-        response = assistant.ask(question)
-        checks["switch_to_" + intent] = assistant.state.get("intent_final") == intent
-        if intent in ("recommend", "health"):
-            checks["count_" + intent] = response.table is not None and len(response.table) == (2 if intent == "recommend" else 3)
-    checks["no_unnecessary_followup_api"] = client.stats["calls"] == calls_after_synthesis
+    if args.scenario != "customer-quality":
+        for question, intent in [("حلل العملاء آخر 12 شهر", "customers"),
+                                 ("إيه أهم مشكلتين محتاجين تدخل عاجل؟", "recommend"),
+                                 ("سيبنا من التوصيات. عايز أخطر 3 مشاكل في جودة البيانات وتأثيرها على التحليلات", "health")]:
+            response = assistant.ask(question)
+            checks["switch_to_" + intent] = assistant.state.get("intent_final") == intent
+            if intent in ("recommend", "health"):
+                checks["count_" + intent] = response.table is not None and len(response.table) == (2 if intent == "recommend" else 3)
+        checks["no_unnecessary_followup_api"] = client.stats["calls"] == calls_after_synthesis
     result = {"checks": checks, "passed": all(checks.values()), "scenario": args.scenario, "model": cfg.model,
               "successful_requests": client.stats["calls"], "tokens": client.stats["tokens"],
               "mode": answer.mode, "limitation": "One live conversation; not a universal quality or availability guarantee."}

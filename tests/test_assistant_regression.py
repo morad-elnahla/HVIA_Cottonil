@@ -1071,3 +1071,44 @@ def test_real_customer_quality_scenario_no_groq():
     second = a.ask_local('طيب من التلات حلول اللي اقترحتهم، اختار حل واحد نبدأ بيه لو الميزانية محدودة، واشرح ليه اخترته، وحدد 3 مؤشرات نقيس بيها نجاحه خلال 90 يوم.')
     assert not second.parts and len(second.actions) == 1 and len(second.table) == 3
     assert first.source == second.source
+
+
+def test_single_domain_strategy_uses_groq_but_keeps_local_decisions(assistant):
+    question = 'حلل مشكلة نقص بيانات العملاء وتأثيرها على فهم سلوكهم، واقترح 3 حلول عملية لتحسين جودة البيانات والاحتفاظ بالعملاء.'
+    assert Assistant.analysis_domains(question) == ['customers']
+    out = {'analysis': [{'text': 'قد يحد غياب المعرّف من تتبع سلوك العميل، لكن الأرقام الحالية لا تثبت سبب عدم عودته.',
+                         'evidence': ['customers']}], 'steps': []}
+    session = configure_mock(assistant, [Response(content=out), Response(content=out)])
+    first = assistant.ask(question)
+    assert first.mode.startswith('Groq لصياغة') and not first.llm_note
+    assert len(first.actions) == len(first.decision_options) == 3
+    assert first.inferences and len(session.calls) == 2
+    packet = json.loads(session.calls[0]['messages'][1]['content'])
+    customer_evidence = next(item for item in packet['evidence'] if item['id'] == 'customers')
+    assert len(customer_evidence['decision_options']) == 3
+    assert '19.23%' not in ' '.join(first.inferences)
+    follow = assistant.ask('من الحلول دي اختار واحد نبدأ به، وحدد 3 مؤشرات نجاح خلال 90 يوم.')
+    assert len(session.calls) == 2
+    assert len(follow.actions) == 1 and len(follow.table) == 3
+    assert follow.actions[0].startswith(first.decision_options[0]['action'])
+    assert follow.source == first.source and '90 يوم' in follow.text
+
+
+def test_single_domain_groq_failure_keeps_evidenced_actions(assistant):
+    question = 'حلل مشكلة نقص بيانات العملاء واقترح 3 حلول عملية.'
+    session = configure_mock(assistant, [requests.Timeout()])
+    answer = assistant.ask(question)
+    assert answer.mode == 'المحرك المحلي' and 'بطيئة' in answer.llm_note
+    assert len(answer.actions) == len(answer.decision_options) == 3
+    assert answer.facts and answer.source
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize('question,expected', [
+    ('حلل مشاكل بيانات العملاء واقترح حلولًا', ['customers']),
+    ('حلل مشكلة نقص بيانات العملاء واقترح 3 حلول لتحسين جودة البيانات', ['customers']),
+    ('حلل المخزون واقترح خطوات لمعالجة النقص', ['inventory']),
+    ('مبيعات القاهرة في سبتمبر 2026', []),
+])
+def test_strategy_detection_is_intent_based_not_cross_domain_only(question, expected):
+    assert Assistant.analysis_domains(question) == expected

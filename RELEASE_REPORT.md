@@ -226,3 +226,39 @@ disabled. Assertions require one answer with three actions, then one action and
 three KPI rows, preserving the original source and period.
 
 Validation: 308 offline tests passed, 2 training tests deselected, 32 warnings.
+
+## Evidence-first single-domain synthesis — 2026-11-02
+
+Strategic requests with one known evidence domain now use the same reviewed
+Groq interpretation path as cross-domain analysis when Groq is configured.
+Customer-owned data-quality outcomes remain in the customer domain unless the
+user explicitly asks for a general data-health audit. Locally calculated
+customer options are retained as structured follow-up context and remain
+available if Groq is unavailable; the model does not recreate those options.
+
+Real Groq acceptance on `openai/gpt-oss-120b`: the customer-quality request and
+independent review completed in 2 successful requests / 3,450 reported tokens.
+All acceptance checks passed: 3 evidence-backed options, then 1 selected option
+and 3 measurement indicators in a 90-day follow-up using the same scope, with no
+extra provider call. This is one live conversation, not a general quality
+guarantee. The explicit acceptance command is
+`python live_acceptance.py --live --scenario customer-quality`.
+
+Local validation after the change: 311 tests passed, 5 deselected. The
+deselections were the two model-training tests, the full processed-data smoke,
+the real-branch visual-analysis scenario, and the rendered Streamlit follow-up
+scenario. The remaining suite includes routing/context/fallback regressions and
+the saved-production-bundle cold-start check across all pages. The separate
+real-data customer-quality test and live Groq acceptance also passed.
+
+Interactive Cloud verification: the supplied [Cottonil URL](https://cotonil.streamlit.app/)
+loaded the Cottonil dashboard, showed runtime version `f903620`, and displayed
+Groq as configured. On that published version, the customer-data problem
+produced three customer/sales-grounded action options and visible sources, with
+no inventory or recommendation-engine takeover. The follow-up selected one of
+the saved options and displayed three accessible KPI rows for the requested
+90-day horizon, preserving customer context and source scope. This verifies one
+live conversation on `f903620`, not the local candidate changes or a general
+quality guarantee. The direct HTTP health probe still could not complete, and
+the documented [alternate app URL](https://milestone1rag.streamlit.app/) was
+asleep; the interactive Cottonil page is the Cloud evidence used here.
