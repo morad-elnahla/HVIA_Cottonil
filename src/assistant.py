@@ -785,7 +785,15 @@ class Assistant:
             answer.decision_options = [dict(action=a, reason=
                 "هذا اختيار تشغيلي من الإجراءات المعروضة سابقًا لبدء تجربة محدودة؛ الأدلة لا تتضمن مقارنة تكلفة وعائد تثبت أنه الأفضل ماليًا.")
                 for a in answer.actions]
-            answer.decision_topic = topic or ("customers" if "customers" in answer.source else "")
+            answer.decision_topic = "customers" if "customers" in answer.source else topic or ""
+            for option in answer.decision_options:
+                identity_action = re.search(r"معرف|هويه|تعريف|ربط|تسجيل", norm(option["action"]))
+                if answer.decision_topic == "customers" and identity_action:
+                    baseline = next((f for f in answer.facts if "بدون معرّف عميل" in f), "")
+                    option["reason"] = ("تحسين ربط المعاملة بالعميل يتيح تتبع إعادة الشراء قبل تخصيص إنفاق لحملات؛ "
+                        + baseline + " الأولوية تشغيلية؛ لا تتوفر تكلفة وعائد محسوبان للمفاضلة المالية.")
+                    option["measurement"] = ("قارن نسبة صافي المبيعات بدون معرّف صالح بنفس تعريف خط الأساس التاريخي، "
+                        "وراجع صلاحية المعرّفات والتكرار وتكلفة التسجيل أسبوعيًا؛ تحسن التسجيل لا يثبت وحده تحسن الاحتفاظ.")
 
     def visualize(self, answer: Answer) -> Answer:
         """Separate axes for each measured column: no inferred values or aggregation."""

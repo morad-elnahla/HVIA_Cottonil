@@ -187,3 +187,24 @@ includes four punctuation variants, four domain references, independent commands
 cardinality versus horizon, and the exact reported two-turn real-data interaction.
 No API calls, data changes or training. Cloud behavior remains unverified. The
 planner remains rule-assisted, not a guarantee of unrestricted language understanding.
+
+## Generated-action follow-up persistence — 2026-11-02
+
+Root causes: reviewed synthesis actions lacked the decision metadata created by
+local customer handlers; solution synonyms and `during 90 days` bypassed the
+follow-up route. Unified action persistence runs for every displayed answer and
+hydrates older saved responses. Measurement horizons resolve before decomposition;
+action count and KPI count remain separate. Synthesis prompts now condition
+inventory/discount advice on the requested domain. Sidebar revision reads actual
+checkout HEAD, rather than assuming GitHub HEAD is deployed.
+
+Validation: 296 offline tests passed, 2 training tests deselected, 32 warnings.
+Real saved-data tools were exercised with reviewed model responses replayed offline.
+Additionally, the exact two-turn scenario was submitted once to the actual Cloud
+app: revision 4472f68 was visibly verified; first response was Groq synthesis,
+follow-up selected an actual prior action with three KPI rows and 90-day evaluation
+without recommendations/sales rerouting. The live test exposed overly generic
+mixed-domain topic metadata; a subsequent targeted correction gives customer-source
+ownership precedence and preserves the original missing-ID fact in the rationale.
+Three affected regressions passed after that correction; no second live Groq call
+was made for the correction. No data/model changes or retraining.
