@@ -231,9 +231,9 @@ def render_answer(a, compact=False, top=True, chart_key=None):
             if a.table is not None and len(a.table):
                 H(df_html(a.table, max_rows=None))
             if a.fig is not None:
-                fig = a.fig
+                fig = go.Figure(a.fig)
                 fig.update_layout(title=None)
-                chart(fig, 300, key=chart_key)
+                chart(fig, max(300, fig.layout.height or 300), key=chart_key)
         if a.source:
             H('<div class="src">📎 المصدر: ' + " · ".join(f"<b>{esc(k)}</b>: {esc(v)}" for k, v in a.source.items()) + "</div>")
     if top and (a.mode or a.llm_note):
@@ -811,6 +811,14 @@ def get_assistant(D, F):
             from copy import deepcopy
             replacement.state = deepcopy(getattr(previous, "state", {}))
             replacement.turns = deepcopy(getattr(previous, "turns", []))
+            replacement.last_answer = deepcopy(getattr(previous, "last_answer", None))
+            if replacement.last_answer is None:
+                # Migrate existing same-dataset sessions after this capability is
+                # deployed; never search past the most recent assistant reply.
+                latest = next((m for m in reversed(st.session_state.get("chat", []))
+                               if m.get("role") == "assistant"), None)
+                if latest is not None:
+                    replacement.last_answer = deepcopy(latest.get("a"))
         st.session_state.asst = replacement
         st.session_state._asst_stamp = current_stamp
     st.session_state.asst.ctx = ctx
@@ -859,6 +867,7 @@ def page_assistant(D, F):
     if st.session_state.chat and st.button("مسح المحادثة"):
         st.session_state.chat = []
         asst.state, asst.turns = {}, []
+        asst.last_answer = None
         st.rerun()
 
 

@@ -853,3 +853,79 @@ def test_real_processed_data_smoke():
     assert a.state["ent"]["branches"] == growth.head(2).index.tolist()
     assert len(decision.table) == len(decision.actions) == 2 and not decision.parts
     assert "هامش الربح الحالية (%)" in decision.table
+
+@pytest.mark.parametrize('visual_request', ['اعملها علي هيأة جراف او داش بورد يوضح اكتر', 'حولها لرسم بياني', 'اعرضها في داشبورد', 'show as charts'])
+def test_visual_followup_uses_saved_numeric_result(assistant, monkeypatch, visual_request):
+    table = pd.DataFrame({'الفرع': ['أ', 'ب'], 'المبيعات (جنيه)': [120., 90.], 'التغطية المقدرة (أسابيع)': [2., 3.], 'هامش الربح %': [30., 25.]})
+    original = Answer.make('تحليل', table=table, source={'الفترة': '2026-10', 'النطاق': 'أ - ب'}, notes=['التغطية تقديرية'])
+    assistant.last_answer = original
+    def forbidden(*a, **k):
+        raise AssertionError('Formatting must not route or call tools/Groq')
+    monkeypatch.setattr(assistant, '_answer', forbidden)
+    result = assistant.ask(visual_request)
+    assert result.fig is not None and len(result.fig.data) == 3
+    for trace, col in zip(result.fig.data, table.columns[1:]):
+        assert list(trace.y) == table[col].tolist()
+        assert list(trace.customdata) == ['أ', 'ب']
+    assert result.source == original.source and result.notes == original.notes
+    assert result.table is None
+    assert original.fig is None
+    assert assistant.last_answer is original
+
+
+def test_visual_followup_no_history_or_non_numeric(assistant):
+    assert assistant.ask_local('اعملها جراف').fig is None
+    assistant.last_answer = Answer.make('صحة البيانات', table=pd.DataFrame({'الفحص': ['المبيعات'], 'الحالة': ['سليم']}))
+    result = assistant.ask_local('اعملها جراف')
+    assert result.fig is None and 'النتيجة الأخيرة' in result.text
+
+
+def test_visual_new_topic_does_not_replay_previous(assistant, monkeypatch):
+    old = Answer.make('قديم', table=pd.DataFrame({'الفرع': ['أ'], 'المبيعات': [12]}))
+    assistant.last_answer = old
+    fresh = Answer.make('عملاء', table=pd.DataFrame({'الشريحة': ['جديد'], 'العدد': [7]}))
+    seen = []
+    monkeypatch.setattr(assistant, '_answer', lambda text, use_llm: seen.append(text) or fresh)
+    result = assistant.ask_local('اعرض العملاء في رسم بياني')
+    assert seen and list(result.fig.data[0].y) == [7]
+    monkeypatch.setattr(assistant, '_answer', lambda text, use_llm: Answer.make('فحوصات جودة البيانات سليمة'))
+    assistant.ask_local('صحة البيانات')
+    assert assistant.ask_local('اعملها جراف').fig is None
+
+
+def test_visual_real_branch_analysis_without_groq():
+    a = Assistant(data.load(), client=GroqClient(Settings(enabled=False)))
+    answer = a.ask_local('اختار أضعف فرعين من حيث نمو المبيعات وحلل أداء كل فرع باستخدام المبيعات والمخزون والخصومات وهامش الربح واقترح خطة')
+    assert answer.table is not None and len(answer.table) == 2
+    result = a.ask_local('اعملها علي هيأة جراف او داش بورد يوضح اكتر')
+    assert result.fig is not None
+    for trace in result.fig.data:
+        assert list(trace.y) == answer.table[trace.name].tolist()
+        assert list(trace.customdata) == answer.table['الفرع'].tolist()
+    assert result.source == answer.source
+    assert a.ask_local('حولها لرسم بياني').fig.to_json() == result.fig.to_json()
+
+
+def test_visual_followup_rendered_in_streamlit():
+    from streamlit.testing.v1 import AppTest
+    root = Path(__file__).resolve().parents[1]
+    at = AppTest.from_file(str(root / 'app.py'), default_timeout=180).run()
+    at.sidebar.radio[0].set_value('المساعد الذكي').run()
+    a = at.session_state.asst
+    a.last_answer = Answer.make('تحليل', table=pd.DataFrame({'الفرع': ['أ', 'ب'], 'المبيعات': [12., 9.], 'التغطية المقدرة (أسابيع)': [2., 3.]}))
+    at.chat_input[0].set_value('اعملها جراف').run()
+    assert not at.exception
+    assert len(at.get('plotly_chart')) == 1
+    at.run()
+    assert not at.exception and len(at.get('plotly_chart')) == 1
+    next(b for b in at.button if b.label == 'مسح المحادثة').click().run()
+    assert not at.exception and at.session_state.asst.last_answer is None
+    assert not at.get('plotly_chart')
+
+
+def test_visual_negation_does_not_activate_chart_mode(assistant, monkeypatch):
+    seen = []
+    answer = Answer.make('نتيجة محلية')
+    monkeypatch.setattr(assistant, '_answer', lambda text, use_llm: seen.append(text) or answer)
+    result = assistant.ask_local('مش عايز جراف، عايز تحليل العملاء')
+    assert seen and result is answer and result.fig is None

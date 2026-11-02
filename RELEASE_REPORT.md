@@ -135,3 +135,21 @@ Git-based deployment. Tested an isolated export of the staged Git tree without
 .env or external data configuration: all nine pages rendered, and saved forecast,
 quality and churn results loaded successfully. No Groq calls or training ran.
 The actual Cottonil Cloud URL remains unknown: the supplied URL serves FinCon.
+# Visualization follow-ups — 2026-11-02
+
+- Root cause: conversational state stored filters and truncated text, not the
+  structured last answer. Presentation-only requests reached ambiguous routing.
+- Store a copy of only the latest answer per assistant session. Chart follow-ups
+  reuse its exact tables/figures, sources and caveats without Groq or data tools.
+  Explicit new subjects/periods/entities use normal routing; nonnumeric latest
+  results never fall back to an unrelated older analysis. Negated chart requests
+  remain normal requests. Clearing chat also clears the saved result.
+- Plotly subplots use independent axes for measured columns, preserving units,
+  branch labels and missing values. Streamlit renders the actual figure with a
+  stable message key and sufficient height, without mutating saved figures.
+- Offline suite: 277 passed, 2 training tests deselected, 32 warnings. Includes
+  real two-branch analysis followed by the reported chart request, exact plotted
+  values, paraphrases, topic change, no history/nonnumeric results, negation,
+  repeat rendering and an actual Streamlit chart element. No API calls or training.
+- Live Cloud rendering and Groq connectivity were not tested for this change.
+- Streamlit chart API: https://docs.streamlit.io/develop/api-reference/charts/st.plotly_chart

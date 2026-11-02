@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from . import insights as ins
 from . import inventory as inv
@@ -169,6 +170,7 @@ class Assistant:
         self._ins = None
         self.state: dict = {}
         self.turns: list[dict] = []
+        self.last_answer: Answer | None = None
 
     def status(self) -> dict:
         """حالة الذكاء الاصطناعي للواجهة (من غير أي تفاصيل إعدادات)."""
@@ -678,10 +680,71 @@ class Assistant:
         return bool(sp["intent"] or sp["metric"] or sp["dim"] or any(sp["ent"].values()))
 
     def ask_local(self, text: str) -> Answer:
-        return self._answer(text, use_llm=False)
+        return self.respond(text, use_llm=False)
 
     def ask(self, text: str) -> Answer:
-        return self._answer(text, use_llm=True)
+        return self.respond(text, use_llm=True)
+
+    def respond(self, text: str, use_llm: bool) -> Answer:
+        """Presentation follow-ups operate on saved results, not reconstructed prose."""
+        n = self.requested_text(text)
+        visual_terms = r"(?:\b(?:جراف|جرافيك|شارت|chart|charts|dashboard|داشبورد)\b|داش\s+بورد|رسم\s+بياني|رسوم\s+بيانيه|لوحه\s+(?:تحكم|بيانيه))"
+        presentation = re.sub(r"(?:مش\s*عايز|لا\s*اريد|بدون|متعرضش|ما\s*تعرضش|سيبنا\s+من)\s+(?:ال)?" + visual_terms, "", n)
+        visual = bool(re.search(visual_terms, presentation))
+        if visual:
+            spec = self.parse(text)
+            # An explicit new metric, entity or period is a data request, not a
+            # request to replay the previous topic. Resolve it through normal routing.
+            new_data = (spec["metric"] is not None or spec["intent"] is not None
+                        or spec["per"] is not None or any(spec["ent"].values())
+                        or spec["topic"] is not None)
+            previous = getattr(self, "last_answer", None)
+            if not new_data:
+                if previous is None:
+                    return Answer.make("مفيش تحليل سابق أحوله لرسم. اسأل عن البيانات المطلوبة أولًا، أو حدد المؤشر والفترة.")
+                return self.visualize(previous)
+        answer = self._answer(text, use_llm)
+        # Retain only the latest result, even when it has no chartable data.
+        # This prevents a later visualization from reviving an older topic.
+        self.last_answer = deepcopy(answer)
+        return self.visualize(answer) if visual else answer
+
+    def visualize(self, answer: Answer) -> Answer:
+        """Separate axes for each measured column: no inferred values or aggregation."""
+        if answer.parts:
+            parts = [self.visualize(p) for p in answer.parts]
+            result = Answer.combine(parts, [p.title for p in answer.parts])
+            result.mode = "رسوم محلية من نتائج التحليل المحفوظة"
+            return result
+        frame = answer.table
+        figure = None
+        if frame is not None and not frame.empty:
+            numeric = [c for c in frame.select_dtypes(include="number").columns
+                       if frame[c].replace([np.inf, -np.inf], np.nan).notna().any()]
+            dimensions = [c for c in frame.columns if c not in frame.select_dtypes(include="number").columns]
+            if numeric and dimensions:
+                labels = frame[dimensions].fillna("غير متاح").astype(str).agg(" · ".join, axis=1).tolist()
+                rows = (len(numeric) + 1) // 2
+                figure = make_subplots(rows=rows, cols=2, subplot_titles=[str(c) for c in numeric],
+                                       vertical_spacing=min(.08, .5 / rows))
+                for i, c in enumerate(numeric):
+                    values = frame[c].replace([np.inf, -np.inf], np.nan)
+                    figure.add_trace(go.Bar(x=list(range(len(frame))), y=values.tolist(),
+                                           name=str(c), customdata=labels, marker_color=MINT,
+                                           hovertemplate="%{customdata}<br>%{y:,.2f}<extra>%{fullData.name}</extra>"),
+                                     row=i // 2 + 1, col=i % 2 + 1)
+                    figure.update_xaxes(tickmode="array", tickvals=list(range(len(frame))), ticktext=labels,
+                                        row=i // 2 + 1, col=i % 2 + 1)
+                    figure.update_yaxes(title_text=str(c), rangemode="tozero", row=i // 2 + 1, col=i % 2 + 1)
+                figure.update_layout(height=max(350, rows * 300), showlegend=False)
+        if figure is None and answer.fig is not None:
+            figure = deepcopy(answer.fig)
+        if figure is None:
+            return Answer.make("النتيجة الأخيرة مفيهاش بيانات رقمية منظمة مناسبة للرسم؛ مش هحوّل النص لأرقام تخمينية.",
+                               source=deepcopy(answer.source))
+        return Answer.make("عرض بياني لنفس نتائج التحليل، بنفس النطاق والفترة.", fig=figure,
+                           source=deepcopy(answer.source), notes=deepcopy(answer.notes),
+                           mode="رسوم محلية من نتائج التحليل المحفوظة")
 
     def _answer(self, text: str, use_llm: bool) -> Answer:
         """Resolve each clause once. Groq can resolve ambiguity, never override intent."""
