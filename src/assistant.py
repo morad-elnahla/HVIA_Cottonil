@@ -729,10 +729,14 @@ class Assistant:
             spec = self.parse(scope_text)
             if (spec["topic"] in (None, "recommend", previous.decision_topic) and spec["per"] is None
                     and not any(spec["ent"].values())):
-                count = result_count(text) or 1
+                plan_requested = bool(re.search(r"خطه|خطوات|خطوه", n))
+                # A cardinality attached to the plan describes steps, not the
+                # number of prior decisions to select. Resolve selection from
+                # the part before the plan clause, then default to one choice.
+                selection_text = re.split(r"خطه|خطوات|خطوه", n, maxsplit=1)[0] if plan_requested else text
+                count = result_count(selection_text) or 1
                 options = previous.decision_options[:count]
                 option = options[0] if options else {}
-                plan_requested = bool(re.search(r"خطه|خطوات|خطوه", n))
                 requested_plan_steps = result_count(text) if plan_requested else None
                 answer = Answer.make("أولوية البدء بناءً على التحليل السابق",
                     actions=[o["action"] + " سبب الاختيار: " + o["reason"] for o in options],
@@ -758,9 +762,15 @@ class Assistant:
                     indicators = re.search(r"(\d+)\s+مؤشرات", n)
                     indicator_count = int(indicators[1]) if indicators else (2 if re.search(r"مؤشرين|مؤشران", n) else 0)
                     if indicator_count:
+                        indicator_methods = option.get("indicators", [
+                            "عدد الحالات التي اجتازت الإجراء ÷ جميع الحالات المؤهلة × 100؛ راجع عينة مدققة.",
+                            "نسبة إعادة الفحص الناجحة: الحالات التي اجتازت الفحص ÷ الحالات المعاد فحصها × 100؛ قارن بخط الأساس."])
+                        reconciliation_scope = (
+                            "نسبة المصالحة للمؤشرات المتأثرة = السجلات أو الإجماليات المتطابقة مع المصدر المعتمد "
+                            "÷ إجمالي ما تمت مراجعته × 100؛ قارن بخط الأساس ووثّق الاستثناءات.")
                         rows = [
-                            {"المؤشر": "اكتمال التنفيذ", "طريقة القياس": option.get("indicators", ["عدد الحالات التي اجتازت الإجراء ÷ جميع الحالات المؤهلة × 100؛ راجع عينة مدققة.", "نسبة إعادة الفحص الناجحة: الحالات التي اجتازت الفحص ÷ الحالات المعاد فحصها × 100؛ قارن بخط الأساس."])[0]},
-                            {"المؤشر": "النتيجة المستهدفة", "طريقة القياس": option.get("indicators", ["عدد الحالات التي اجتازت الإجراء ÷ جميع الحالات المؤهلة × 100؛ راجع عينة مدققة.", "نسبة إعادة الفحص الناجحة: الحالات التي اجتازت الفحص ÷ الحالات المعاد فحصها × 100؛ قارن بخط الأساس."])[1] if previous.decision_topic == "health" else ("للربط بالعملاء: صافي المبيعات غير المرتبطة بمعرّف صالح ÷ إجمالي صافي المبيعات × 100؛ قارن بنفس التعريف بخط الأساس." if previous.decision_topic == "customers" else "حدد نتيجة الإجراء قبل التنفيذ وقارن التغير بخط أساس ومجموعة مماثلة؛ لا تخلط التنفيذ بالأثر.")},
+                            {"المؤشر": "اكتمال التنفيذ", "طريقة القياس": indicator_methods[0]},
+                            {"المؤشر": "النتيجة المستهدفة", "طريقة القياس": reconciliation_scope if previous.decision_topic == "health" else ("للربط بالعملاء: صافي المبيعات غير المرتبطة بمعرّف صالح ÷ إجمالي صافي المبيعات × 100؛ قارن بنفس التعريف بخط الأساس." if previous.decision_topic == "customers" else "حدد نتيجة الإجراء قبل التنفيذ وقارن التغير بخط أساس ومجموعة مماثلة؛ لا تخلط التنفيذ بالأثر.")},
                             {"المؤشر": "تكلفة التنفيذ لكل حالة ناجحة", "طريقة القياس": "التكلفة الفعلية بما فيها وقت العاملين ÷ عدد الحالات المنفذة والمتحقق من جودتها؛ سجلها أثناء التجربة."},
                         ]
                         answer.table = pd.DataFrame(rows[:indicator_count])

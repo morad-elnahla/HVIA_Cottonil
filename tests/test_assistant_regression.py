@@ -237,8 +237,12 @@ def test_compound_health_quality_solution_and_followup_plan(assistant):
     second = assistant.ask_local("طيب اختار مشكلة واحدة وحط خطة تنفيذ من 3 خطوات ومؤشرين نقيس بيهم النجاح")
     assert len(second.actions) == 3 and all(f"الخطوة {i}:" in second.actions[i - 1] for i in (1, 2, 3))
     assert second.table is not None and len(second.table) == 2
+    assert len(second.facts) == 1
     assert second.source["المصدر"] == "فحوصات data.py"
     assert all("خط الأساس" in value or "المصدر المعتمد" in value for value in second.table["طريقة القياس"])
+    assert "هذا الفحص وحده" not in second.table.iloc[1]["طريقة القياس"]
+    assert "نسبة المصالحة للمؤشرات المتأثرة" in second.table.iloc[1]["طريقة القياس"]
+    assert "محدودة بالعملاء المعروفين" not in second.table.iloc[1]["طريقة القياس"]
 
     forecast = assistant.ask_local("توقعات نوفمبر وديسمبر 2026 بالقطع ومدى الثقة")
     assert assistant.state["intent_final"] == "forecast"
