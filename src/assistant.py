@@ -85,7 +85,7 @@ def result_count(text: str) -> int | None:
              "ثلاث": 3, "ثلاثه": 3, "تلات": 3, "تلاته": 3, "اربع": 4, "اربعه": 4,
              "خمس": 5, "خمسه": 5, "ست": 6, "سته": 6, "سبع": 7, "سبعه": 7,
              "ثمان": 8, "ثماني": 8, "ثمانيه": 8, "تسع": 9, "تسعه": 9, "عشر": 10, "عشره": 10}
-    nouns = r"(?:خطوات|خطوه|مشاكل|مشكلات|مشكله|توصيات|توصيه|اولويات|تدخلات|اجراءات|اجراء|فرص|فروع|فرع|عملاء|عميل|منتجات|منتج|اصناف|صنف|فحوصات|فحوص|فحص|ملاحظات|ملاحظه|انواع|نوع|نتائج|نتيجه)"
+    nouns = r"(?:حلول|حل|خطوات|خطوه|مشاكل|مشكلات|مشكله|توصيات|توصيه|اولويات|تدخلات|اجراءات|اجراء|فرص|فروع|فرع|عملاء|عميل|منتجات|منتج|اصناف|صنف|فحوصات|فحوص|فحص|ملاحظات|ملاحظه|انواع|نوع|نتائج|نتيجه)"
     match = re.search(r"\b(\d+|" + "|".join(words) + r")\s+(?:ال)?" + nouns + r"\b", n)
     if match:
         value = int(match[1]) if match[1].isdigit() else words[match[1]]
@@ -331,6 +331,8 @@ class Assistant:
         return dims[0] if dims else None
 
     def intent_of(self, t, n):
+        if self.customer_owned_request(n):
+            return "customers"
         if self.health_request(n):
             return "health"
         if self.recommendation_request(n):
@@ -515,6 +517,7 @@ class Assistant:
             # introduce independent data operations, irrespective of punctuation.
             referential = topic is None and command and bool(re.search(
                 r"\b(?:الوضع|ذلك|ده|دي|النتائج|الارقام|الموضوع)\b", clean))
+            referential |= bool(re.match(r"و?(?:رتبهم|رتبها|وضحهم|وضحها|اشرحهم|اشرحها)\b", clean))
             dependent = (previous == "forecast" and Assistant.forecast_explanation_fields(clean)
                          and topic in (None, "forecast", "inventory"))
             dependent |= (previous == "customers" and not command and
@@ -582,7 +585,7 @@ class Assistant:
         for part in self.split_parts(text):
             clean = self.requested_text(part)
             base = self.parse(clean)
-            sp = (self.recommendation_spec(clean) or self.customer_spec(clean)
+            sp = (self.customer_spec(clean) or self.recommendation_spec(clean)
                   or self.forecast_explanation_spec(clean) or self.inventory_branch_spec(clean)
                   or self.comparison_spec(clean) or base)
             if self.metric_comparison_request(clean):
@@ -712,6 +715,11 @@ class Assistant:
         action_request = bool(re.search(r"اجراء|خطو[هة]|خطوات|تدخل|توصي|حلول|حل\b", n))
         prioritize = bool(re.search(r"اختار|تختار|اختر|اهم|اولوي|نبدا|نبدأ", n))
         reference = bool(re.search(r"دي|ده|السابق|لسه|منها|من الاجراءات|من الخطوات|طيب|طب ", n))
+        if action_request and prioritize and reference and not (previous is not None and getattr(previous, "decision_options", [])):
+            # Missing reference targets must never silently become company-wide
+            # recommendations. This also protects conversations from older builds.
+            if self.topic_of(n) in (None, "recommend"):
+                return Answer.make("الرد السابق مفيهوش خيارات إجراءات محفوظة أقدر أختار منها. أعد طلب الحلول للموضوع المقصود؛ مش هبدلها بتوصيات لموضوع تاني.")
         if previous is not None and getattr(previous, "decision_options", []) and action_request and prioritize and reference:
             # A future evaluation horizon belongs to the proposed experiment,
             # not to the historical data filters of the evidence being reused.
@@ -1467,9 +1475,23 @@ class Assistant:
 
     # ---------- العملاء
     @staticmethod
+    def customer_owned_request(text: str) -> bool:
+        """Domain subject takes precedence over generic problem/action vocabulary.
+
+        Explicit audit/engine requests remain separate operations. 'Improve data
+        quality' within a customer objective is an outcome, not a health tool call.
+        """
+        n = Assistant.requested_text(text)
+        if not kw(toks(n), "عملاء", "عميل", "churn", "rfm"):
+            return False
+        return not bool(re.search(r"فحوص|فحص|صفحه\s+(?:صحه|جوده)|محرك\s+التوصيات|(?:اعرض|هات|راجع)\s+(?:صحه|جوده)\s+البيانات|(?:مشاكل|مشكلات)\s+(?:في\s+)?(?:جوده|صحه)\s+(?:ال)?بيانات", n))
+
+    @staticmethod
     def topic_of(text: str):
         """Explicit subject wins over the previous operation or model name."""
         text = Assistant.requested_text(text)
+        if Assistant.customer_owned_request(text):
+            return "customers"
         if Assistant.health_request(text):
             return "health"
         if Assistant.recommendation_request(text):
@@ -1559,7 +1581,7 @@ class Assistant:
         answer.decision_options = options
         answer.decision_topic = "customers"
         requested = self.requested_text(sp["text"])
-        if re.search(r"اقترح|اجراء|خطوات|خطه|تحسين الاحتفاظ", requested):
+        if re.search(r"اقترح|اجراء|حلول|خطوات|خطه|تحسين الاحتفاظ", requested):
             limit = result_count(requested) or 3
             answer.actions = [o["action"] + " الأساس: " + o["reason"] for o in options[:limit]]
             if limit > len(options):
@@ -1597,7 +1619,8 @@ class Assistant:
     @staticmethod
     def recommendation_request(text: str) -> bool:
         # Preserve the existing task-specific inventory and forecast explanations.
-        if Assistant.inventory_branch_request(text) or Assistant.forecast_explanation_request(text):
+        if (Assistant.customer_owned_request(text) or Assistant.inventory_branch_request(text)
+                or Assistant.forecast_explanation_request(text)):
             return False
         n = Assistant.requested_text(text)
         t = toks(n)
@@ -1663,6 +1686,8 @@ class Assistant:
     @staticmethod
     def health_request(text: str) -> bool:
         n = Assistant.requested_text(text)
+        if Assistant.customer_owned_request(n):
+            return False
         # Bind quality to data itself, not to a model elsewhere in a compound
         # request (e.g. missing customer data plus Churn model reliability).
         return bool(re.search(

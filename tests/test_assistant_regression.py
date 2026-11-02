@@ -1037,3 +1037,37 @@ def test_old_generated_action_snapshot_is_hydrated(assistant, monkeypatch):
     answer = assistant.ask_local(CLOUD_FOLLOW_Q)
     assert len(answer.actions) == 1 and len(answer.table) == 3
     assert 'تحسين تعريف العملاء' in answer.actions[0]
+
+@pytest.mark.parametrize('noun', ['مشكلة نقص', 'عدم اكتمال', 'ضعف جودة'])
+@pytest.mark.parametrize('actions', ['حلول', 'إجراءات', 'خطوات'])
+def test_customer_subject_owns_problem_and_actions(assistant, monkeypatch, noun, actions):
+    q = f'حلل {noun} بيانات العملاء في Cottonil خلال آخر 12 شهر، واقترح 3 {actions} عملية قليلة التكلفة لتحسين جودة البيانات والاحتفاظ بالعملاء، ورتبهم حسب الأولوية.'
+    monkeypatch.setattr(assistant, 'h_recommend', lambda *a: pytest.fail('wrong recommendations tool'))
+    monkeypatch.setattr(assistant, 'h_health', lambda *a: pytest.fail('quality outcome is not an audit request'))
+    first = assistant.ask_local(q)
+    assert not first.parts and len(first.actions) == 3
+    assert len(first.decision_options) == 3
+    follow = assistant.ask_local('طيب من التلات حلول اللي اقترحتهم، اختار حل واحد نبدأ بيه لو الميزانية محدودة، واشرح ليه اخترته، وحدد 3 مؤشرات نقيس بيها نجاحه خلال 90 يوم.')
+    assert not follow.parts and len(follow.actions) == 1 and len(follow.table) == 3
+    assert follow.source == first.source
+
+
+def test_missing_decision_reference_fails_closed(assistant, monkeypatch):
+    assistant.last_answer = Answer.make('رد قديم بدون خيارات')
+    monkeypatch.setattr(assistant, '_answer', lambda *a: pytest.fail('unresolved reference must not route'))
+    result = assistant.ask_local('طيب من التلات حلول اختار حل واحد وليه')
+    assert 'مفيهوش خيارات' in result.text
+
+
+def test_explicit_customer_audit_and_engine_still_route(assistant):
+    assert assistant.response_specs('اعرض فحوص جودة بيانات العملاء')[0][0]['intent'] == 'health'
+    assert assistant.response_specs('اعرض محرك التوصيات عن العملاء')[0][0]['intent'] == 'recommend'
+
+
+def test_real_customer_quality_scenario_no_groq():
+    a = Assistant(data.load(), client=GroqClient(Settings(enabled=False)))
+    first = a.ask_local('حلل مشكلة نقص بيانات العملاء في Cottonil خلال آخر 12 شهر، واقترح 3 حلول عملية قليلة التكلفة لتحسين جودة البيانات والاحتفاظ بالعملاء، ورتبهم حسب الأولوية.')
+    assert not first.parts and len(first.actions) == 3 and '19.23%' in first.text
+    second = a.ask_local('طيب من التلات حلول اللي اقترحتهم، اختار حل واحد نبدأ بيه لو الميزانية محدودة، واشرح ليه اخترته، وحدد 3 مؤشرات نقيس بيها نجاحه خلال 90 يوم.')
+    assert not second.parts and len(second.actions) == 1 and len(second.table) == 3
+    assert first.source == second.source

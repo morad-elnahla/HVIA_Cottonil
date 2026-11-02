@@ -208,3 +208,21 @@ mixed-domain topic metadata; a subsequent targeted correction gives customer-sou
 ownership precedence and preserves the original missing-ID fact in the rationale.
 Three affected regressions passed after that correction; no second live Groq call
 was made for the correction. No data/model changes or retraining.
+
+## Customer subject versus recommendation intent — 2026-11-02
+
+The reported f89ca4e failure was a real local-routing defect, not stale deployment.
+Generic problem/priority words outranked customer ownership; action clauses and
+pronoun-based ranking directives split from the analysis. A shared subject check
+now precedes generic recommendation/health matching, customer specs take priority,
+and dependent ranking stays with the action list. Explicit health audits and
+recommendation-engine requests retain their routes. Missing saved decision targets
+fail closed instead of invoking unrelated company-wide tools. Solution cardinality
+uses the same extraction as actions/steps. No Groq integration/data/model changes.
+
+Added nine wording combinations, explicit audit/engine boundaries, missing-reference
+protection, and the exact two-turn scenario against saved actual data with Groq
+disabled. Assertions require one answer with three actions, then one action and
+three KPI rows, preserving the original source and period.
+
+Validation: 308 offline tests passed, 2 training tests deselected, 32 warnings.
