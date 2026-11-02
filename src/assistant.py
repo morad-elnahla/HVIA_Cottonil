@@ -122,6 +122,8 @@ class Answer:
     summary: str = ""                                   # ملخص صاغه النموذج اللغوي (لو اتفعّل واتحقق)
     engine_detail: str = ""
     llm_note: str = ""                                  # رسالة مفهومة لو الذكاء الاصطناعي ماردش
+    decision_options: list = field(default_factory=list)
+    decision_topic: str = ""
 
     @classmethod
     def make(cls, headline, facts=(), forecasts=(), inferences=(), source=None, table=None, fig=None, notes=(), actions=(), mode="المحرك المحلي"):
@@ -509,7 +511,13 @@ class Assistant:
             dependent = (previous == "forecast" and Assistant.forecast_explanation_fields(clean)
                          and topic in (None, "forecast", "inventory"))
             dependent |= (previous == "customers" and not command and
-                          kw(toks(clean), "نسبه", "مساهمه", "churn", "موثوق", "اكبر"))
+                          (kw(toks(clean), "نسبه", "مساهمه", "churn", "موثوق", "اكبر")
+                           or (topic == "customers" and phrase(clean, "عايز اعرف", "بناء", "الاحتفاظ"))))
+            # A requested action justified by the same analysis is an output
+            # requirement, not a new recommendations-engine operation.
+            dependent |= (previous == "customers" and topic in (None, "customers")
+                          and phrase(clean, "اقترح", "اجراء", "خطوات", "استنتاج", "نستنتج")
+                          and not phrase(clean, "بدل", "سيبنا", "موضوع جديد"))
             dependent |= (previous == "inventory" and not command and
                           kw(toks(clean), "تغطيه", "متاثره", "الطلب", "لكل") and
                           not kw(toks(clean), "اهم", "اولويات"))
@@ -688,6 +696,24 @@ class Assistant:
     def respond(self, text: str, use_llm: bool) -> Answer:
         """Presentation follow-ups operate on saved results, not reconstructed prose."""
         n = self.requested_text(text)
+        previous = getattr(self, "last_answer", None)
+        action_request = bool(re.search(r"اجراء|خطو[هة]|خطوات|تدخل|توصي", n))
+        prioritize = bool(re.search(r"اختار|اختر|اهم|اولوي|نبدا|نبدأ", n))
+        reference = bool(re.search(r"دي|ده|السابق|لسه|منها|من الاجراءات|من الخطوات|طيب|طب ", n))
+        if previous is not None and getattr(previous, "decision_options", []) and action_request and prioritize and reference:
+            spec = self.parse(text)
+            if (spec["topic"] in (None, previous.decision_topic) and spec["per"] is None
+                    and not any(spec["ent"].values())):
+                count = result_count(text) or 1
+                options = previous.decision_options[:count]
+                answer = Answer.make("أولوية البدء بناءً على التحليل السابق",
+                    actions=[o["action"] + " سبب الاختيار: " + o["reason"] for o in options],
+                    notes=["الأولوية حكم تشغيلي مبني على الأدلة المتاحة؛ تكلفة التنفيذ والعائد غير محسوبين، وليست وعدًا بتحسين الاحتفاظ."],
+                    source=deepcopy(previous.source))
+                answer.decision_options = deepcopy(previous.decision_options)
+                answer.decision_topic = previous.decision_topic
+                self.last_answer = deepcopy(answer)
+                return answer
         visual_terms = r"(?:\b(?:جراف|جرافيك|شارت|chart|charts|dashboard|داشبورد)\b|داش\s+بورد|رسم\s+بياني|رسوم\s+بيانيه|لوحه\s+(?:تحكم|بيانيه))"
         presentation = re.sub(r"(?:مش\s*عايز|لا\s*اريد|بدون|متعرضش|ما\s*تعرضش|سيبنا\s+من)\s+(?:ال)?" + visual_terms, "", n)
         visual = bool(re.search(visual_terms, presentation))
@@ -1446,9 +1472,29 @@ class Assistant:
                      if not self.D.customers.empty else {})
             best["العميل"] = best.customer.map(names).fillna(best.customer.astype(str))
             table = best[["العميل", "صافي المبيعات (جنيه)"]]
-        return Answer.make(f"تحليل العملاء ({self.scope_text(sp['ent'])}) — {sp['plabel']}: {count:,} عميل معروف اشترى خلال الفترة.",
+        answer = Answer.make(f"تحليل العملاء ({self.scope_text(sp['ent'])}) — {sp['plabel']}: {count:,} عميل معروف اشترى خلال الفترة.",
                            facts, notes=["المبيعات بدون معرّف عميل تدخل في إجمالي المبيعات، ولا تدخل في عدد العملاء أو ترتيبهم. AUC مقياس تمييز، وليس نسبة دقة؛ تقييم Churn محفوظ على عينة النموذج، وليس إعادة تقييم للفترة أو الفلاتر المختارة."],
                            table=table, source=self.source(sp, "العملاء النشطون وتغطية بيانات العملاء وتركيز المبيعات", origin="المبيعات الفعلية + تقييم Churn المحفوظ"))
+        options = []
+        if missing > 0 and total > 0:
+            options.append(dict(action="حسّن تسجيل معرّف العميل بموافقته عند البيع، وراجع اكتمال الربط يوميًا قبل الإنفاق على حملات احتفاظ واسعة.",
+                reason=f"{missing / total * 100:.2f}% من المبيعات بلا معرّف عميل؛ لا يمكن تتبع رجوع أصحابها. نبدأ باختبار إجراء التسجيل داخل العملية الحالية؛ انخفاض تكلفته احتمال يحتاج تقدير وقت العاملين والتكامل، وليس تكلفة محسوبة."))
+        if count and identified > 0:
+            options.append(dict(action="اختبر تواصل خدمة موجّهًا مع عينة من العملاء المعروفين ذوي الإنفاق المرتفع، بعد التأكد من موافقتهم وصلاحية بيانات التواصل؛ لا تبدأ بخصم شامل.",
+                reason=f"أكبر 10% يساهمون بـ{top_sales / identified * 100:.2f}% من مبيعات العملاء المعروفين. التركّز يبرر اختبارًا محدودًا، لكنه لا يثبت أنهم معرضون للمغادرة أو أن التواصل سيحسن رجوعهم."))
+        options.append(dict(action="قِس أثر تجربة الاحتفاظ بمقارنة مجموعة تتلقى الإجراء وأخرى مماثلة لا تتلقاه، مع تحديد فترة القياس والتكلفة قبل التنفيذ.",
+            reason="تقييم Churn المحفوظ لا يثبت أثر أي تدخل؛ نحتاج سجل التواصل والموافقات وتكلفة التنفيذ ومشتريات لاحقة لقياس الرجوع والربحية، بدل اعتبار التنبؤ سببًا أو أثرًا مضمونًا."))
+        answer.decision_options = options
+        answer.decision_topic = "customers"
+        requested = self.requested_text(sp["text"])
+        if re.search(r"اقترح|اجراء|خطوات|خطه|تحسين الاحتفاظ", requested):
+            limit = result_count(requested) or 3
+            answer.actions = [o["action"] + " الأساس: " + o["reason"] for o in options[:limit]]
+            if limit > len(options):
+                answer.notes.append(f"المتاح {len(options)} إجراءات مسندة للأدلة؛ لن أضيف إجراءات لاستكمال العدد بلا أساس.")
+            answer.inferences = ["الأرقام تثبت تغطية تعريف العملاء وتركيز إنفاقهم فقط؛ لا تثبت أسباب عدم الرجوع أو استجابة العملاء لإجراء جديد."]
+            answer.text = answer._compose()
+        return answer
 
     def h_customers(self, sp) -> Answer:
         if sp.get("view") in ("overview", "top"):

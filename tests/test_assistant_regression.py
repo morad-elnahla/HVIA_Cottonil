@@ -929,3 +929,36 @@ def test_visual_negation_does_not_activate_chart_mode(assistant, monkeypatch):
     monkeypatch.setattr(assistant, '_answer', lambda text, use_llm: seen.append(text) or answer)
     result = assistant.ask_local('مش عايز جراف، عايز تحليل العملاء')
     assert seen and result is answer and result.fig is None
+
+CUSTOMER_ACTION_QUESTION = 'حلل أداء العملاء في Cottonil خلال آخر 12 شهر. عايز أعرف عدد العملاء النشطين، ونسبة المبيعات اللي ملهاش بيانات عملاء، وقد إيه أكبر 10% من العملاء بيساهموا في المبيعات. بناءً على الأرقام دي، اقترح 3 إجراءات عملية لتحسين الاحتفاظ بالعملاء، ووضح إيه اللي نقدر نستنتجه فعلًا وإيه اللي محتاج بيانات إضافية.'
+
+
+def test_customer_actions_and_priority_use_same_evidence(assistant, monkeypatch):
+    first = assistant.ask_local(CUSTOMER_ACTION_QUESTION)
+    assert not first.parts
+    assert len(first.actions) == 3
+    assert first.inferences
+    assert first.decision_topic == 'customers'
+    def blocked(*args, **kwargs):
+        raise AssertionError('Priority followup must reuse saved evidence')
+    monkeypatch.setattr(assistant, '_answer', blocked)
+    follow = assistant.ask('طيب من الإجراءات دي، اختار أهم إجراء نبدأ بيه لو الميزانية محدودة، وفسر اختيارك بناءً على نتائج تحليل العملاء اللي لسه عملته.')
+    assert not follow.parts and len(follow.actions) == 1
+    assert follow.actions[0].startswith(first.decision_options[0]['action'])
+    assert follow.source == first.source
+    assert not follow.facts and 'حسّن تسجيل' in follow.actions[0]
+    assert 'تكلفة' in follow.notes[0]
+
+
+def test_priority_followup_does_not_hijack_topic_change(assistant):
+    assistant.ask_local(CUSTOMER_ACTION_QUESTION)
+    changed = assistant.ask_local('سيبنا من العملاء عايز أهم 3 مشاكل في جودة البيانات')
+    assert changed.decision_topic != 'customers'
+
+
+def test_customer_action_candidates_depend_on_available_evidence(assistant):
+    assistant.D.sales['customer'] = 'C0'
+    first = assistant.ask_local(CUSTOMER_ACTION_QUESTION)
+    assert len(first.actions) == 2
+    assert not any('حسّن تسجيل' in x for x in first.actions)
+    assert any('المتاح 2' in x for x in first.notes)

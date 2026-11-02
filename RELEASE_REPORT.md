@@ -153,3 +153,20 @@ The actual Cottonil Cloud URL remains unknown: the supplied URL serves FinCon.
   repeat rendering and an actual Streamlit chart element. No API calls or training.
 - Live Cloud rendering and Groq connectivity were not tested for this change.
 - Streamlit chart API: https://docs.streamlit.io/develop/api-reference/charts/st.plotly_chart
+
+## Customer actions and prioritization — 2026-11-02
+
+Customer overview handlers previously omitted requested actions, and dependent
+customer fields could be decomposed into repeated analyses. Customer analysis now
+keeps dependent action requirements together and generates evidence-conditioned
+options with their rationale and explicit uncertainty. Structured options support
+prioritization follow-ups before decomposition, reusing the saved scope and facts
+without Groq or data-tool reruns. Explicit topic/period/entity changes continue
+through normal routing. Options are operational suggestions, not measured ROI.
+
+Validation: 280 offline tests passed, two training tests deselected, 32 warnings.
+The reported pair was also run against the actual saved dataset: three actions,
+one selected priority referencing 19.23% unidentified sales, identical source and
+scope, no split, no API calls. Regression cases include topic switching and full
+customer identification (no unsupported missing-ID action). Cloud execution was
+not tested for this change.
