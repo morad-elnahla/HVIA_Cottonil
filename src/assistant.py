@@ -705,14 +705,18 @@ class Assistant:
         """Presentation follow-ups operate on saved results, not reconstructed prose."""
         n = self.requested_text(text)
         previous = getattr(self, "last_answer", None)
-        action_request = bool(re.search(r"اجراء|خطو[هة]|خطوات|تدخل|توصي", n))
+        # Normalize every displayed action, including reviewed Groq output and
+        # older sessions, before attempting reference resolution.
+        if previous is not None:
+            self.remember_decisions(previous)
+        action_request = bool(re.search(r"اجراء|خطو[هة]|خطوات|تدخل|توصي|حلول|حل\b", n))
         prioritize = bool(re.search(r"اختار|تختار|اختر|اهم|اولوي|نبدا|نبدأ", n))
         reference = bool(re.search(r"دي|ده|السابق|لسه|منها|من الاجراءات|من الخطوات|طيب|طب ", n))
         if previous is not None and getattr(previous, "decision_options", []) and action_request and prioritize and reference:
             # A future evaluation horizon belongs to the proposed experiment,
             # not to the historical data filters of the evidence being reused.
             measurement = bool(re.search(r"نقيس|قياس|نجاح|متابعه|تقييم", n))
-            horizon = re.search(r"بعد\s+(\d+)\s+(شهور|اشهر|شهر|اسابيع|اسبوع|ايام|يوم)", n) if measurement else None
+            horizon = re.search(r"(?:بعد|خلال)\s+(\d+)\s+(شهور|اشهر|شهر|اسابيع|اسبوع|ايام|يوم)", n) if measurement else None
             scope_text = n[:horizon.start()] + n[horizon.end():] if horizon else text
             spec = self.parse(scope_text)
             if (spec["topic"] in (None, previous.decision_topic) and spec["per"] is None
@@ -730,6 +734,17 @@ class Assistant:
                     answer.facts = ["خطة قياس مقترحة " + duration + ": " + o.get("measurement",
                         "حدد مؤشر النتيجة وخط الأساس وتكلفة الإجراء، وقارن بمجموعة مماثلة قبل الحكم على أثره.") for o in options]
                     answer.notes.append("فترة المتابعة مستقبلية وليست بيانات متاحة بالفعل؛ لا توجد نتيجة نجاح محسوبة أو نسبة تحسن مضمونة.")
+                    indicators = re.search(r"(\d+)\s+مؤشرات", n)
+                    if indicators:
+                        rows = [
+                            {"المؤشر": "اكتمال التنفيذ", "طريقة القياس": "عدد الحالات المؤهلة التي نُفذ فيها الإجراء ÷ جميع الحالات المؤهلة × 100؛ راجع صحة التسجيل بعينة مدققة."},
+                            {"المؤشر": "النتيجة المستهدفة", "طريقة القياس": "للربط بالعملاء: صافي المبيعات غير المرتبطة بمعرّف صالح ÷ إجمالي صافي المبيعات × 100؛ قارن بنفس التعريف بخط الأساس." if previous.decision_topic == "customers" else "حدد نتيجة الإجراء قبل التنفيذ وقارن التغير بخط أساس ومجموعة مماثلة؛ لا تخلط التنفيذ بالأثر."},
+                            {"المؤشر": "تكلفة التنفيذ لكل حالة ناجحة", "طريقة القياس": "التكلفة الفعلية بما فيها وقت العاملين ÷ عدد الحالات المنفذة والمتحقق من جودتها؛ سجلها أثناء التجربة."},
+                        ]
+                        answer.table = pd.DataFrame(rows[:int(indicators[1])])
+                        answer.notes.append("هذه مؤشرات مقترحة لا نتائج محسوبة؛ خطوط الأساس التشغيلية والتكلفة والأهداف الرقمية تحتاج تسجيلًا قبل بدء التجربة.")
+                        if int(indicators[1]) > len(rows):
+                            answer.notes.append("المتاح ثلاثة مؤشرات محددة؛ لم تتم إضافة مؤشرات غير مسندة لاستكمال العدد.")
                     answer.text = answer._compose()
                 self.last_answer = deepcopy(answer)
                 return answer
@@ -749,10 +764,28 @@ class Assistant:
                     return Answer.make("مفيش تحليل سابق أحوله لرسم. اسأل عن البيانات المطلوبة أولًا، أو حدد المؤشر والفترة.")
                 return self.visualize(previous)
         answer = self._answer(text, use_llm)
+        self.remember_decisions(answer, self.topic_of(text))
         # Retain only the latest result, even when it has no chartable data.
         # This prevents a later visualization from reviving an older topic.
         self.last_answer = deepcopy(answer)
         return self.visualize(answer) if visual else answer
+
+    @staticmethod
+    def remember_decisions(answer: Answer, topic=None):
+        """Store what was actually displayed, regardless of its generating engine."""
+        if getattr(answer, "decision_options", []):
+            return
+        if answer.parts:
+            for part in answer.parts:
+                Assistant.remember_decisions(part, topic)
+            answer.decision_options = [deepcopy(o) for p in answer.parts for o in getattr(p, "decision_options", [])]
+            topics = {p.decision_topic for p in answer.parts if getattr(p, "decision_options", [])}
+            answer.decision_topic = next(iter(topics)) if len(topics) == 1 else ""
+        elif answer.actions:
+            answer.decision_options = [dict(action=a, reason=
+                "هذا اختيار تشغيلي من الإجراءات المعروضة سابقًا لبدء تجربة محدودة؛ الأدلة لا تتضمن مقارنة تكلفة وعائد تثبت أنه الأفضل ماليًا.")
+                for a in answer.actions]
+            answer.decision_topic = topic or ("customers" if "customers" in answer.source else "")
 
     def visualize(self, answer: Answer) -> Answer:
         """Separate axes for each measured column: no inferred values or aggregation."""
@@ -1979,8 +2012,9 @@ class Assistant:
                      "Do NOT restate those facts or include branch names or quantities (digits OR words) in your text. "
                      "Analysis must describe possible mechanisms, starting with 'إذا' or 'قد', not assert causes. "
                      "Do not add unmeasured causes such as location or marketing. Distinguish aggregate stock from scarce categories. "
-                     "Check physical availability and lead time before replenishing or testing discounts. "
-                     "Discount experiments require available products, one changed factor and a control group whose similarity is verified first. "
+                     "Only for inventory or discount decisions: check physical availability and lead time before replenishing or testing discounts. "
+                     "Do not introduce discount experiments or stock interventions for a customer identity/data-quality task. "
+                     "When discounts are requested, experiments require available products, one changed factor and a verified control group. "
                      "Never invent discount rates, durations or coverage targets. "
                      'Return only JSON: {"analysis":[{"text":"...","evidence":["sales","inventory"]}],'
                      '"steps":[{"text":"...","evidence":["inventory"]}]}. '
@@ -2005,7 +2039,8 @@ class Assistant:
                     "Do not return a review report. The local table owns all facts, quantities, branch names and rankings: "
                     "remove those from prose, including quantities written in words. "
                     "Analysis is conditional mechanisms only ('إذا' / 'قد'), never factual branch comparisons or causal proof. "
-                    "Do not assume control branches are comparable. First verify physical availability and supplier lead time; "
+                    "Do not introduce inventory or discount actions when the objective is customer identification. "
+                    "Only for inventory/discount objectives: do not assume control branches are comparable; verify physical availability and supplier lead time; "
                     "then fix confirmed shortages, then consider a controlled discount test on available products. "
                     "A test changes one factor and requires a control group selected after checking similarity. "
                     "Do not invent numerical targets, durations, discounts or unmeasured explanations. "

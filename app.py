@@ -21,6 +21,17 @@ AR_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو",
 USER = os.getenv("BI_USER_NAME", "مراد")
 
 
+@st.cache_data
+def deployed_revision():
+    """Read the actual checkout, never infer deployed code from remote HEAD."""
+    import subprocess
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
+            cwd=data.ROOT, stderr=subprocess.DEVNULL, timeout=3, text=True).strip()
+    except (OSError, subprocess.SubprocessError):
+        return "غير متاح"
+
+
 def H(x: str):
     """HTML للصفحة. الأرقام والتواريخ بتتعزل (bidi) عشان تتعرض بالترتيب الصح جوه الجمل العربي."""
     st.markdown(x if x.lstrip().startswith("<style") else ui.bidi_html(x), unsafe_allow_html=True)
@@ -132,6 +143,7 @@ def sidebar(D, rec_count: int):
     with st.sidebar:
         H('<div class="brand"><div class="logo">C</div><div><b>COTTONIL</b><small>مركز قيادة الأعمال</small></div></div>')
         st.radio("الصفحة", PAGES, key="nav", label_visibility="collapsed")
+        st.caption("نسخة التشغيل: " + deployed_revision())
         reason = data.needs_rebuild()
         age = (time.time() - stamp()) / 3600
         when = "النهارده" if age < 24 else f"من {int(age // 24)} يوم"

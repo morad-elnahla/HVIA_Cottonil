@@ -1003,3 +1003,37 @@ def test_real_narrative_and_evaluation_horizon():
     assert 'بعد 3 شهور' in follow.facts[0]
     assert first.source == follow.source
     assert '2025-10-19' in follow.source['الفترة']
+
+CLOUD_CUSTOMER_Q = 'عندنا مشكلة إن جزء من مبيعات Cottonil مش مرتبط بعملاء معروفين. حلل تأثير ده على فهم سلوك العملاء، واقترح 3 حلول عملية قليلة التكلفة، ورتبهم حسب الأولوية.'
+CLOUD_FOLLOW_Q = 'طيب من التلات حلول دول، لو هننفذ واحد بس، تختار إيه وليه؟ وحطلي 3 مؤشرات نقيس بيها نجاحه خلال 90 يوم.'
+
+
+def test_reviewed_synthesis_actions_survive_real_data_followup(monkeypatch):
+    a = Assistant(data.load(), client=GroqClient(Settings(enabled=False)))
+    draft = {'analysis': [{'text': 'قد يحد غياب تعريف العميل من تتبع سلوكه', 'evidence': ['sales', 'customers']}],
+             'steps': [{'text': text, 'evidence': ['customers']} for text in (
+                 'راجع ربط المعاملات بمعرف العميل قبل تخصيص إنفاق جديد',
+                 'دقق جودة معرّفات العملاء المسجلة',
+                 'سجل الموافقات وتكلفة تحسين التسجيل') ]}
+    session = configure_mock(a, [Response(content=draft), Response(content=draft)])
+    first = a.ask(CLOUD_CUSTOMER_Q)
+    assert first.mode.startswith('Groq لصياغة'), first.llm_note
+    assert len(first.actions) == 3 and len(first.decision_options) == 3
+    assert '19.23%' in first.text
+    def blocked(*args, **kwargs):
+        raise AssertionError('No routing/tool/LLM on decision reference')
+    monkeypatch.setattr(a, '_answer', blocked)
+    result = a.ask(CLOUD_FOLLOW_Q)
+    assert len(session.calls) == 2
+    assert not result.parts and len(result.actions) == 1
+    assert first.actions[0] in result.actions[0]
+    assert len(result.table) == 3 and '90 يوم' in result.text
+    assert result.source == first.source
+
+
+def test_old_generated_action_snapshot_is_hydrated(assistant, monkeypatch):
+    assistant.last_answer = Answer.make('تحليل', actions=['تحسين تعريف العملاء', 'تدقيق الربط', 'قياس الجودة'], source={'customers': {'الفترة': '2026'}})
+    monkeypatch.setattr(assistant, '_answer', lambda *a, **k: pytest.fail('must reuse saved actions'))
+    answer = assistant.ask_local(CLOUD_FOLLOW_Q)
+    assert len(answer.actions) == 1 and len(answer.table) == 3
+    assert 'تحسين تعريف العملاء' in answer.actions[0]
