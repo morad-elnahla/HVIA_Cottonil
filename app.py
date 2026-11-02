@@ -143,7 +143,6 @@ def sidebar(D, rec_count: int):
     with st.sidebar:
         H('<div class="brand"><div class="logo">C</div><div><b>COTTONIL</b><small>مركز قيادة الأعمال</small></div></div>')
         st.radio("الصفحة", PAGES, key="nav", label_visibility="collapsed")
-        st.caption("نسخة التشغيل: " + deployed_revision())
         reason = data.needs_rebuild()
         age = (time.time() - stamp()) / 3600
         when = "النهارده" if age < 24 else f"من {int(age // 24)} يوم"

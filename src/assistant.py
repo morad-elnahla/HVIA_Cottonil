@@ -714,7 +714,7 @@ class Assistant:
             self.remember_decisions(previous)
         action_request = bool(re.search(r"اجراء|خطو[هة]|خطوات|تدخل|توصي|حلول|حل\b", n))
         prioritize = bool(re.search(r"اختار|تختار|اختر|اهم|اولوي|نبدا|نبدأ", n))
-        reference = bool(re.search(r"دي|ده|السابق|لسه|منها|من الاجراءات|من الخطوات|طيب|طب ", n))
+        reference = bool(re.search(r"دي|ده|السابق|لسه|منها|من الاجراءات|من الخطوات|من التلاته|من الثلاثه|مشكله واحده|واحده بس|طيب|طب ", n))
         if action_request and prioritize and reference and not (previous is not None and getattr(previous, "decision_options", [])):
             # Missing reference targets must never silently become company-wide
             # recommendations. This also protects conversations from older builds.
@@ -727,14 +727,27 @@ class Assistant:
             horizon = re.search(r"(?:بعد|خلال)\s+(\d+)\s+(شهور|اشهر|شهر|اسابيع|اسبوع|ايام|يوم)", n) if measurement else None
             scope_text = n[:horizon.start()] + n[horizon.end():] if horizon else text
             spec = self.parse(scope_text)
-            if (spec["topic"] in (None, previous.decision_topic) and spec["per"] is None
+            if (spec["topic"] in (None, "recommend", previous.decision_topic) and spec["per"] is None
                     and not any(spec["ent"].values())):
                 count = result_count(text) or 1
                 options = previous.decision_options[:count]
+                option = options[0] if options else {}
+                plan_requested = bool(re.search(r"خطه|خطوات|خطوه", n))
+                requested_plan_steps = result_count(text) if plan_requested else None
                 answer = Answer.make("أولوية البدء بناءً على التحليل السابق",
                     actions=[o["action"] + " سبب الاختيار: " + o["reason"] for o in options],
                     notes=["الأولوية حكم تشغيلي مبني على الأدلة المتاحة؛ تكلفة التنفيذ والعائد غير محسوبين، وليست وعدًا بتحسين الاحتفاظ."],
                     source=deepcopy(previous.source))
+                if plan_requested and options:
+                    option = options[0]
+                    plan_steps = option.get("steps") or [
+                        "حدد خط الأساس والسجلات المتأثرة، وتحقق من تعريف الفحص ومصدر البيانات.",
+                        "راجع الحالات مع مالك البيانات وصحح السبب في المصدر المعتمد مع الاحتفاظ بأثر التعديل.",
+                        "أعد تشغيل الفحص وقارن المؤشر قبل الإجراء وبعده؛ لا تعتمد التغيير قبل المصالحة."]
+                    limit = min(requested_plan_steps or 3, 10)
+                    answer.actions = [f"الخطوة {i}: {step}" for i, step in enumerate(plan_steps[:limit], 1)]
+                    if requested_plan_steps and requested_plan_steps > len(plan_steps):
+                        answer.notes.append(f"المتاح {len(plan_steps)} خطوات تنفيذ مسندة؛ لم نضف خطوات غير موثقة.")
                 answer.decision_options = deepcopy(previous.decision_options)
                 answer.decision_topic = previous.decision_topic
                 if measurement:
@@ -743,15 +756,16 @@ class Assistant:
                         "حدد مؤشر النتيجة وخط الأساس وتكلفة الإجراء، وقارن بمجموعة مماثلة قبل الحكم على أثره.") for o in options]
                     answer.notes.append("فترة المتابعة مستقبلية وليست بيانات متاحة بالفعل؛ لا توجد نتيجة نجاح محسوبة أو نسبة تحسن مضمونة.")
                     indicators = re.search(r"(\d+)\s+مؤشرات", n)
-                    if indicators:
+                    indicator_count = int(indicators[1]) if indicators else (2 if re.search(r"مؤشرين|مؤشران", n) else 0)
+                    if indicator_count:
                         rows = [
-                            {"المؤشر": "اكتمال التنفيذ", "طريقة القياس": "عدد الحالات المؤهلة التي نُفذ فيها الإجراء ÷ جميع الحالات المؤهلة × 100؛ راجع صحة التسجيل بعينة مدققة."},
-                            {"المؤشر": "النتيجة المستهدفة", "طريقة القياس": "للربط بالعملاء: صافي المبيعات غير المرتبطة بمعرّف صالح ÷ إجمالي صافي المبيعات × 100؛ قارن بنفس التعريف بخط الأساس." if previous.decision_topic == "customers" else "حدد نتيجة الإجراء قبل التنفيذ وقارن التغير بخط أساس ومجموعة مماثلة؛ لا تخلط التنفيذ بالأثر."},
+                            {"المؤشر": "اكتمال التنفيذ", "طريقة القياس": option.get("indicators", ["عدد الحالات التي اجتازت الإجراء ÷ جميع الحالات المؤهلة × 100؛ راجع عينة مدققة.", "نسبة إعادة الفحص الناجحة: الحالات التي اجتازت الفحص ÷ الحالات المعاد فحصها × 100؛ قارن بخط الأساس."])[0]},
+                            {"المؤشر": "النتيجة المستهدفة", "طريقة القياس": option.get("indicators", ["عدد الحالات التي اجتازت الإجراء ÷ جميع الحالات المؤهلة × 100؛ راجع عينة مدققة.", "نسبة إعادة الفحص الناجحة: الحالات التي اجتازت الفحص ÷ الحالات المعاد فحصها × 100؛ قارن بخط الأساس."])[1] if previous.decision_topic == "health" else ("للربط بالعملاء: صافي المبيعات غير المرتبطة بمعرّف صالح ÷ إجمالي صافي المبيعات × 100؛ قارن بنفس التعريف بخط الأساس." if previous.decision_topic == "customers" else "حدد نتيجة الإجراء قبل التنفيذ وقارن التغير بخط أساس ومجموعة مماثلة؛ لا تخلط التنفيذ بالأثر.")},
                             {"المؤشر": "تكلفة التنفيذ لكل حالة ناجحة", "طريقة القياس": "التكلفة الفعلية بما فيها وقت العاملين ÷ عدد الحالات المنفذة والمتحقق من جودتها؛ سجلها أثناء التجربة."},
                         ]
-                        answer.table = pd.DataFrame(rows[:int(indicators[1])])
+                        answer.table = pd.DataFrame(rows[:indicator_count])
                         answer.notes.append("هذه مؤشرات مقترحة لا نتائج محسوبة؛ خطوط الأساس التشغيلية والتكلفة والأهداف الرقمية تحتاج تسجيلًا قبل بدء التجربة.")
-                        if int(indicators[1]) > len(rows):
+                        if indicator_count > len(rows):
                             answer.notes.append("المتاح ثلاثة مؤشرات محددة؛ لم تتم إضافة مؤشرات غير مسندة لاستكمال العدد.")
                     answer.text = answer._compose()
                 self.last_answer = deepcopy(answer)
@@ -1722,8 +1736,29 @@ class Assistant:
             selected["الأثر على التحليلات"] = [effect for effect, _ in effects]
             selected["المؤشرات المتأثرة وحدود الثقة"] = [indicators for _, indicators in effects]
             notes.append("حالة الفحص وتفاصيله حقائق من نفس مصدر صفحة صحة البيانات. الأثر تفسير نوعي لحدود الاستخدام، وليس قياسًا ماليًا جديدًا أو حكمًا بأن كل التحليلات غير موثوقة.")
-        return Answer.make(head, notes=notes, source={"المقياس": "جودة البيانات", "الفترة": "آخر بناء للبيانات", "النطاق": "كل الجداول", "المصدر": "فحوصات data.py"},
-                           table=selected.rename(columns={"check": "الفحص", "status": "النتيجة", "detail": "التفاصيل"}))
+        answer = Answer.make(head, notes=notes, source={"المقياس": "جودة البيانات", "الفترة": "آخر بناء للبيانات", "النطاق": "كل الجداول", "المصدر": "فحوصات data.py"},
+                             table=selected.rename(columns={"check": "الفحص", "status": "النتيجة", "detail": "التفاصيل"}))
+        if issues_only and not selected.empty:
+            options = []
+            for row in selected.itertuples():
+                effect, affected = analytical_effect(row.check, row.status)
+                options.append({
+                    "action": f"ابدأ بمعالجة فحص «{row.check}»: {effect}",
+                    "reason": f"الدليل المسجل: {row.detail}. المؤشرات التي يلزم حمايتها: {affected}",
+                    "measurement": f"سجّل خط أساس لعدد الحالات المتأثرة ومعدل اجتياز الفحص قبل التعديل. بعد المعالجة أعد الفحص وطابق المؤشرات المذكورة مع المصدر المعتمد؛ لا تعتبر التحسن نتيجة مالية مثبتة.",
+                    "steps": [
+                        f"وثّق تعريف فحص «{row.check}» وحدد السجلات المتأثرة وخط الأساس من مصدرها؛ لا تستنتج قيمة مالية من الملاحظة.",
+                        "راجع الحالات مع مالك البيانات، وصحح السبب في المصدر المعتمد مع حفظ سجل التغيير وعدم حذف السجلات المختلف عليها تلقائيًا.",
+                        f"أعد تشغيل فحص «{row.check}» ثم طابق المؤشرات المتأثرة مع مصدرها قبل اعتماد النتائج أو توسيع التغيير."],
+                    "indicators": [
+                        "نسبة الحالات التي اجتازت الفحص = الحالات المجتازة ÷ جميع الحالات المعاد فحصها × 100؛ احفظ عدد الحالات وخط الأساس وتعريف العينة.",
+                        f"نسبة المصالحة للمؤشرات المتأثرة ({affected}) = السجلات/الإجماليات المتطابقة مع المصدر المعتمد ÷ إجمالي ما تمت مراجعته × 100؛ وثّق الاستثناءات."]})
+            answer.decision_options = options
+            answer.decision_topic = "health"
+            if re.search(r"اقترح|حلول|اجراءات|خطوات|خطه|خطط|تحسين", norm(sp["text"])):
+                answer.actions = [option["action"] + " الأساس: " + option["reason"]
+                                  for option in options]
+        return answer
 
     # ---------- الذكاء الاصطناعي (Groq): فهم السؤال وتلخيص بس، والأرقام كلها من حسابات النظام
     PLAN_SYS = ("You convert a manager's Arabic question about a clothing retailer into JSON calls. Output ONLY JSON: "
@@ -1900,7 +1935,7 @@ class Assistant:
         action_request = bool(re.search(r"اقترح|حلول|اجراءات|خطوات|خطه|خطط|تحسين", n))
         analytical_request = bool(re.search(r"حلل|تحليل|مشكل|تاثير|اثر|اداء|علاقه", n))
         single_domain_strategy = (len(domains) == 1 and action_request and analytical_request)
-        if single_domain_strategy and domains[0] != "health":
+        if single_domain_strategy:
             return domains
         # Health-impact explanations already have a dedicated evidence handler.
         return domains if (relationship or entity_workflow) and len(domains) >= 2 and "health" not in domains else []
@@ -2034,7 +2069,7 @@ class Assistant:
         n = self.requested_text(text)
         per_branch_plans = bool(selected and re.search(r"خطه|خطط|خطتين|خطتان", n)
                                 and re.search(r"لكل فرع|كل فرع|واحده لكل", n))
-        wants_plan = bool(re.search(r"خطه|خطوات|اقترح|اجراء", n))
+        wants_plan = bool(re.search(r"خطه|خطوات|اقترح|اجراء|حلول|حلولاً", n))
         step_match = re.search(r"(?:\d+|ثلاثه?|تلاته?|اربع[ه]?|خمس[ه]?|اثنين|اتنين)\s+خطو(?:ات|ه)", n)
         requested_steps = (result_count(step_match[0]) if step_match else None) or (2 if re.search(r"خطوت(?:ان|ين)", n) else 3 if wants_plan else 0)
         local_options = next((deepcopy(e["decision_options"]) for e in evidence if e.get("decision_options")), [])
@@ -2185,9 +2220,12 @@ class Assistant:
             sp = deepcopy(base)
             intent, metric = {"sales": ("why", "net"), "profit": ("why", "margin"),
                               "inventory": ("inventory", "net"), "discount": ("discount", "disc_pct"),
-                              "customers": ("customers", "customers"), "forecast": ("forecast", "net")}[domain]
+                              "customers": ("customers", "customers"), "forecast": ("forecast", "net"),
+                              "health": ("health", "net")}[domain]
             sp.update(intent=intent, intent_final=intent, metric=metric, metric_final=metric)
-            if domain in ("sales", "profit"):
+            if domain == "health":
+                answer = self.h_health(sp)
+            elif domain in ("sales", "profit"):
                 ps, pe = self.comparison_range(sp)
                 current = self.data(sp["start"], sp["end"], sp["ent"])
                 previous = self.data(ps, pe, sp["ent"])

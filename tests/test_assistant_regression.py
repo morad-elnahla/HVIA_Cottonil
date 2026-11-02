@@ -219,6 +219,32 @@ def test_health_not_recommendation_or_forecast(assistant):
     assert assistant.state["intent_final"] == "health" and a.source["المصدر"] == "فحوصات data.py"
 
 
+def test_compound_health_quality_solution_and_followup_plan(assistant):
+    assistant.D.health = [
+        {"check": "كل المبيعات مربوطة بعميل", "status": "warn", "detail": "19% بلا معرّف"},
+        {"check": "آخر شهر في الداتا مكتمل", "status": "warn", "detail": "الشهر الأخير جزئي"},
+        {"check": "مبيعات الفروع بتبدأ بعد تاريخ الافتتاح", "status": "warn", "detail": "76 فرعًا يحتاج مراجعة"},
+    ]
+    question = ("لو أنا مدير الشركة، حدد أخطر 3 مشاكل في جودة البيانات، "
+                "وضح تأثير كل مشكلة على التحليلات واقترح حلولًا عملية مرتبة حسب الأولوية")
+    assert Assistant.analysis_domains(question) == ["health"]
+    first = assistant.ask_local(question)
+    assert first.source["المصدر"] == "فحوصات data.py"
+    assert len(first.table) == 3 and len(first.decision_options) == 3
+    assert "تحليل العملاء" in first.table.iloc[0]["الأثر على التحليلات"]
+    assert len(first.actions) == 3 and "كل المبيعات مربوطة بعميل" in first.actions[0]
+
+    second = assistant.ask_local("طيب اختار مشكلة واحدة وحط خطة تنفيذ من 3 خطوات ومؤشرين نقيس بيهم النجاح")
+    assert len(second.actions) == 3 and all(f"الخطوة {i}:" in second.actions[i - 1] for i in (1, 2, 3))
+    assert second.table is not None and len(second.table) == 2
+    assert second.source["المصدر"] == "فحوصات data.py"
+    assert all("خط الأساس" in value or "المصدر المعتمد" in value for value in second.table["طريقة القياس"])
+
+    forecast = assistant.ask_local("توقعات نوفمبر وديسمبر 2026 بالقطع ومدى الثقة")
+    assert assistant.state["intent_final"] == "forecast"
+    assert set(forecast.table["الشهر"]) == {"2026-11", "2026-12"}
+
+
 def test_explicit_period_comparison(assistant):
     a = assistant.ask("قارن مبيعات سبتمبر وأكتوبر 2026")
     assert assistant.state["start"] == pd.Timestamp("2026-10-01")
